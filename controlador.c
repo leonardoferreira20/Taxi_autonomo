@@ -1,61 +1,80 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "Settings.h"
+
 #include <fcntl.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
 
-#define FIFO_CONTROLADOR "/tmp/controlador_fifo"
+int running = 1;
 
-int main(){
-  int fd;
-  char buffer[100];
-  
-  // Cria o FIFO público (se ainda não existir)
-  if (mkfifo(FIFO_CONTROLADOR, 0666) == -1) {
-    perror("mkfifo");
-    // não sair se já existir
-  }
-
-  printf("[CONTROLADOR] A aguardar clientes em %s...\n", FIFO_CONTROLADOR);
-
-  // Abre FIFO para leitura (bloqueante)
-  fd = open(FIFO_CONTROLADOR, O_RDONLY);
-
-  if (fd == -1) {
-    perror("open");
-    exit(1);
-  }
-
-  while (1) {
-    ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
-    if (n > 0) {
-      buffer[n] = '\0';
-      printf("[CONTROLADOR] Recebido: %s\n", buffer);
-
-      char cmd[16], user[64], fifo_cli[128];
-      if (sscanf(buffer, "%s %s %s", cmd, user, fifo_cli) == 3) {
-        if (strcmp(cmd, "LOGIN") == 0) {
-          int fd_cli = open(fifo_cli, O_WRONLY);
-          if (fd_cli != -1) {
-            write(fd_cli, "OK\n", 3);
-            close(fd_cli);
-            printf("[CONTROLADOR] Login aceite para %s\n", user);
-          } else {
-            perror("Erro a responder ao cliente");
-          }
+int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nClientes){
+    for(int i = 0; i < nClientes; i++){
+        if(strcmp(clientesAtivos[i], user)==0){
+            return 1;
         }
-      }
-
-    } else {
-      // Se o cliente fechar o FIFO, reabre para não bloquear o próximo
-      close(fd);
-      fd = open(FIFO_CONTROLADOR, O_RDONLY);
     }
-  }
+    return 0;
+}
 
-  close(fd);
-  unlink(FIFO_CONTROLADOR);
+int main(int argc, char * argv[]){
+    Mensagem m;
+    char clientesAtivos[MAXCLI][20];
+    int nClientes = 0;
+    char login[20];
 
-  return 0;
+
+    if (argc!=1){
+        perror("Numero invalido de parametros!\n");
+        exit(-1);
+    }
+
+    if (access(SERVERFIFO, F_OK) == 0) {
+        printf("O servidor ja se encontra em execucao\n");
+        exit(0);
+    }
+
+    if (mkfifo(SERVERFIFO, 0666) == -1) {
+        if (errno != EEXIST) {
+        perror("erro na criacao do named pipe");
+        exit(EXIT_FAILURE);
+        }
+    }
+
+    int fd = open(SERVERFIFO, O_RDWR);
+    if (fd == -1) {
+        perror("erro na abertura do named pipe para leitura");
+        unlink(SERVERFIFO);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("O controlador está pront a receber clientes!\n");
+
+    char user[20];
+
+    while (running) {
+        printf("A receber Usernames: \n");
+        int nbytes = read(fd, &user, sizeof(user));
+        
+        if (nbytes == -1) {
+            perror("Ocorreu um erro na leitura do Username!\n");
+        }else{
+            if(nClientes <MAXCLI && verficaClienteRegistado(clientesAtivos, user, nClientes) == 0){
+                printf("Cliente aceite! E este é o seu Username: %s\n", user);
+                strcpy(clientesAtivos[nClientes],user);
+                nClientes++;
+            }else 
+                printf("Cliente nao aceite");
+                strcpy(login, "falhou");
+        }
+    }
+
+
+    close(fd);
+    unlink(SERVERFIFO);
+    return 0;
 }
