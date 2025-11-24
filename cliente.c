@@ -12,7 +12,7 @@
 
 int running = 1;
 
-
+//Funcao escreve o tipo de erro
 void comado_invalido(int invalido){
     printf("-> Comando inválido\n");
     if(invalido == 1){
@@ -102,6 +102,7 @@ void leitura_comandos_cliente(const char * utilizador_cmd){
     if(strcasecmp(cmd,"agendar")==0){
         if(nargs!=3) comado_invalido(1);
         //COMANDO AGENDAR
+
     }else if (strcasecmp(cmd,"cancelar")==0){
         if(nargs!=1) comado_invalido(2);
         //COMANDO CANCELAR
@@ -126,6 +127,7 @@ void leitura_comandos_cliente(const char * utilizador_cmd){
 
 
 int main(int argc, char* argv[]){
+    
     setbuf(stdout, NULL);
 
     char acesso[20]; //mensagem de acesso valido ou invalido
@@ -137,6 +139,13 @@ int main(int argc, char* argv[]){
     if (argc!=2){
         perror("Numero invalido de parametros!\n");
         exit(-1);
+    }
+
+    if (access(SERVERFIFO, F_OK) != 0) {
+        printf("[sistema] O servidor não se encontra em execucao\n");
+        exit(-1);
+    }else{
+        printf("[sistema] O servidor ja se encontra em execucao\n");
     }
 
     //Defenido nas settings o nome do servidor
@@ -188,8 +197,8 @@ int main(int argc, char* argv[]){
     while(running){
         printf("-> Introduza comando: \n");
         printf("-> ");
-        scanf("%d", &m.tipo_msg);
-        //leitura_comandos_cliente(cmd);
+        scanf("%s", cmd);
+        leitura_comandos_cliente(cmd);
         nbytes = write(fd,&m,sizeof(m));
 	    
         if(nbytes == -1){
@@ -204,8 +213,7 @@ int main(int argc, char* argv[]){
         if(m.tipo_msg == 0) break;
     }
 
-
-
+    
     close(fd);
     close(rd);
     unlink(fifo_cliente);

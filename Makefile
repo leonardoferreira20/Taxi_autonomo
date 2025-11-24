@@ -1,27 +1,30 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -g
+all: controlador cliente
 
-all: controlador cliente veiculo
+# Compilar objectos
+controlador.o: controlador.c Settings.h
+	gcc -c controlador.c -o controlador.o
 
-controlador: controlador.c
-	$(CC) $(CFLAGS) controlador.c -o controlador
+cliente.o: cliente.c Settings.h
+	gcc -c cliente.c -o cliente.o
 
-cliente: cliente.c
-	$(CC) $(CFLAGS) cliente.c -o cliente
+# Criar executáveis
+controlador: controlador.o
+	@echo $(PASSFILE)
+	gcc controlador.o -o controlador
 
-veiculo: veiculo.c
-	$(CC) $(CFLAGS) veiculo.c -o veiculo
+cliente: cliente.o
+	gcc cliente.o -o cliente
 
-clean:
-	@echo "Limpando ficheiros..."
-	rm -f *.o controlador cliente veiculo
-	rm -f /tmp/controlador_fifo /tmp/cli_*
-	@echo "Limpo!"
-
-run_controlador: controlador
+# Executar controlador
+run-server: controlador
+	@echo "Starting the server..."
 	./controlador
 
-test: all
-	@echo "Compilação bem-sucedida!"
+# Executar cliente
+run-client: cliente
+	@echo "Running the client..."
+	./cliente
 
-.PHONY: all clean run_controlador test
+# Limpar ficheiros
+clean:
+	rm -f *.o controlador cliente fifo_* fifo* 

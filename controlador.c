@@ -27,49 +27,56 @@ int main(int argc, char * argv[]){
     int nClientes = 0;
     char login[20];
 
-
+    //Verifica
     if (argc!=1){
-        perror("Numero invalido de parametros!\n");
+        perror("[sistema] Numero invalido de parametros!\n");
         exit(-1);
     }
 
     if (access(SERVERFIFO, F_OK) == 0) {
-        printf("O servidor ja se encontra em execucao\n");
+        printf("[sistema] O servidor ja se encontra em execucao\n");
         exit(0);
     }
 
     if (mkfifo(SERVERFIFO, 0666) == -1) {
         if (errno != EEXIST) {
-        perror("erro na criacao do named pipe");
+        perror("[sistema] Erro na criacao do named pipe");
         exit(EXIT_FAILURE);
         }
     }
 
     int fd = open(SERVERFIFO, O_RDWR);
     if (fd == -1) {
-        perror("erro na abertura do named pipe para leitura");
+        perror("[sistema] Erro na abertura do named pipe para leitura");
         unlink(SERVERFIFO);
         exit(EXIT_FAILURE);
     }
 
-    printf("O controlador está pront a receber clientes!\n");
+    printf("[controlador] O controlador está pronto a receber clientes!\n");
 
     char user[20];
 
     while (running) {
-        printf("A receber Usernames: \n");
+        printf("[controlador] A receber Usernames: \n");
         int nbytes = read(fd, &user, sizeof(user));
         
         if (nbytes == -1) {
-            perror("Ocorreu um erro na leitura do Username!\n");
+            perror("[sistema] Ocorreu um erro na leitura do Username!\n");
         }else{
             if(nClientes <MAXCLI && verficaClienteRegistado(clientesAtivos, user, nClientes) == 0){
-                printf("Cliente aceite! E este é o seu Username: %s\n", user);
+                printf("[controlador] Cliente aceite! E este é o seu Username: %s\n", user);
                 strcpy(clientesAtivos[nClientes],user);
                 nClientes++;
-            }else 
-                printf("Cliente nao aceite");
+
+
+
+
+
+
+            }else {
+                printf("[controlador] Cliente nao aceite\n");
                 strcpy(login, "falhou");
+            }
         }
     }
 
