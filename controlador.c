@@ -1,16 +1,36 @@
 #include "Settings.h"
 
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <errno.h>
-
 int running = 1;
+
+void thread_id(Authentication *a){
+    printf("[%s Thread %d]",a->username,a->pid);
+}
+
+
+void * chat_clinte(void * arg){
+    Authentication *a = (Authentication *) arg;
+    Mensagem m;
+    int servico=1;
+    
+    int td = open(a->fifo_name,O_RDWR);
+    if (td == -1) {
+        perror("[sistema] Erro na abertura do named pipe para leitura");
+        exit(EXIT_FAILURE);
+    }
+    printf("criei uma thread!\n");
+    strcpy(m.msg,"estou aqui dentro");
+    write(td,&m,sizeof(m));
+    while(servico=1){
+        thread_id(a);
+        printf("A receber ordens de serviço para cliente :\n");
+        break;
+    }
+
+    return NULL;
+}
+
+
+
 
 int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nClientes){
     for(int i = 0; i < nClientes; i++){
@@ -22,7 +42,7 @@ int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nC
 }
 
 int main(int argc, char * argv[]){
-    Mensagem m;
+    int cl;
     char clientesAtivos[MAXCLI][20];
     int nClientes = 0;
     char login[20];
@@ -54,28 +74,57 @@ int main(int argc, char * argv[]){
 
     printf("[controlador] O controlador está pronto a receber clientes!\n");
 
-    char user[20];
 
     while (running) {
+        Authentication a;
+        Mensagem m;
+        m.login = 0;
+        strcpy(m.msg,"");
+
         printf("[controlador] A receber Usernames: \n");
-        int nbytes = read(fd, &user, sizeof(user));
+        int nbytes = read(fd, &a, sizeof(a));
         
+        if (access(a.fifo_name, F_OK) != 0) {
+        printf("[sistema] O Cliente não se encontra em execucao\n");
+        }
+
         if (nbytes == -1) {
             perror("[sistema] Ocorreu um erro na leitura do Username!\n");
         }else{
-            if(nClientes <MAXCLI && verficaClienteRegistado(clientesAtivos, user, nClientes) == 0){
-                printf("[controlador] Cliente aceite! E este é o seu Username: %s\n", user);
-                strcpy(clientesAtivos[nClientes],user);
+
+            cl = open(a.fifo_name, O_RDWR);
+            if (cl == -1) {
+            perror("[sistema] Erro na abertura do named pipe para leitura do cliente");
+            close (cl);
+            }
+
+            if(nClientes <MAXCLI && verficaClienteRegistado(clientesAtivos, a.username, nClientes) == 0){
+                printf("[controlador] Cliente aceite! E este é o seu Username: %s\n", a.username);
+                strcpy(clientesAtivos[nClientes],a.username);
                 nClientes++;
 
-
-
-
+            strcpy(m.msg,"[controlador] Login verificado! Seja bem vindo!\n");
+            m.login = 1;
+            write(cl,&m,sizeof(m));
+            
+            //Uma variavel nao irá bastar
+            //Porque nos vamos poder ter 20 threads a funcionar ao mesmo tempo
+            //Muito provavelmente iremos precisar de um array de threads
+            //Porque no fim vaos ter de fazer join das threads
+            //Ou seja esperar que todas as threads terminem
+            pthread_t thread; 
+            
+            if(pthread_create(&thread,NULL,chat_clinte,&a) != 0){
+                perror("[sistem]Erro a criar a thread");
+            }
 
 
             }else {
-                printf("[controlador] Cliente nao aceite\n");
-                strcpy(login, "falhou");
+            printf("[controlador] Cliente nao aceite\n");
+            strcpy(login, "falhou");
+                
+            write(cl,login,strlen(login)+1);
+            close(cl);
             }
         }
     }

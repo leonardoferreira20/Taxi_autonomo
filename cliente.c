@@ -133,7 +133,8 @@ int main(int argc, char* argv[]){
     char acesso[20]; //mensagem de acesso valido ou invalido
     char cmd[MAXCMD];
     Mensagem m;//mensagem campo estrutura
-    int login = 0;
+    Authentication a;
+    char login [20];
 
     //Verificacao de numero de argumentos
     if (argc!=2){
@@ -161,29 +162,38 @@ int main(int argc, char* argv[]){
     //Cliente envia o seu username para o servidor para se autenticar
     //Se não existir outro utilizador com este username e ainda houver espaço para o utilizador (servidor tem numeo maximo de utilizadores) O login é bem sucedido
     //write(fd,argv[1],strlen(argv[1])+1);
-    
-    strcpy(acesso,argv[1]);
-    printf("entra\n");
-    write(fd,acesso,strlen(acesso)+1);
 
+    strcpy(a.username,argv[1]);
+    a.pid = getpid();
+    snprintf(a.fifo_name, sizeof(a.fifo_name), "fifo_%s_%d", argv[1],a.pid);
     //Criar pipe do cliente com o nome do cliente
-    char fifo_cliente[64];
-    snprintf(fifo_cliente, sizeof(fifo_cliente), "fifo_%s", argv[1]);
-
-    if(mkfifo(fifo_cliente,0666) == -1){
+    if(mkfifo(a.fifo_name,0666) == -1){
         perror("Erro a criar pipe do cliente!\n");
         exit(-1);
     };
 
     //Abrir pipe do cliente para receber mensagens do servidor
-    int rd = open(fifo_cliente, O_RDWR);
+    int rd = open(a.fifo_name, O_RDWR);
     if(rd == -1){
         perror("Erro a abrir namedpipe do cliente!\n");
         close(fd);
         exit(-1);
     }
+
+    write(fd,&a,sizeof(a));
+
     //read (valido invalido)
-    int nbytes; //= read(rd,acesso,sizeof(acesso));
+    int nbytes= read(rd,&m,sizeof(m));
+
+    if(m.login==0){
+        printf("Login não foi bem sucedido!\nJá existe um Username com o mesmo nome ativo!\n");
+        close(fd);
+        close(rd);
+        unlink(a.fifo_name);
+        return 0;
+    }
+    printf("Login bem sucedido! Bem vindo!\n");
+    printf("%s",m.msg);
 
     /*
     //Verificar se o acesso é valido ou invalido (existe algum cliente com o mesmo nome)
@@ -206,7 +216,7 @@ int main(int argc, char* argv[]){
 			    perror("erro ao escrever a mensagem no pipe");
 		    close(fd);
 		    close(rd);
-		    unlink(fifo_cliente);
+		    unlink(a.fifo_name);
 		    exit(EXIT_FAILURE);
 	    }
 
@@ -216,6 +226,6 @@ int main(int argc, char* argv[]){
     
     close(fd);
     close(rd);
-    unlink(fifo_cliente);
+    unlink(a.fifo_name);
     return 0;
 }

@@ -1,10 +1,24 @@
+#ifndef SETTINGS_H
+#define SETTINGS_H
 
 #define SERVERFIFO "fifo_server"
+#define VEICULOFIFO "fifo_veiculo"
 #define TAM 256
 #define MAXCMD 128
 #define MAXCLI 1
 #define USERNAME_SIZE 20
 #define MAXVEICULO 20
+
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
+#include <pthread.h>
 
 typedef enum {
 	AUTHENTICATION,
@@ -15,6 +29,7 @@ typedef enum {
 
 typedef struct {
     char msg[TAM];
+	int login;
 	int tipo_msg;
 	request_type type;
 }Mensagem;
@@ -26,7 +41,7 @@ typedef struct authentication {
 	int pid;
 	//bool viagem;
 	//int ativo;
-}authentication;
+}Authentication;
 
 
 
@@ -69,3 +84,5 @@ typedef struct authentication {
 }authentication;
 
 */
+
+#endif
