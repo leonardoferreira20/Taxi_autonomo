@@ -1,9 +1,19 @@
 #include "Settings.h"
 
 int running = 1;
+int tempo = TEMPO_INICIAL;
+
 
 void thread_id(Authentication *a){
     printf("[%s Thread %d]",a->username,a->pid);
+}
+
+void * gestor_tempo(void * arg){
+    while(running){
+        ++tempo;
+        sleep(1);
+    }
+    return NULL;
 }
 
 
@@ -73,7 +83,10 @@ int main(int argc, char * argv[]){
     }
 
     printf("[controlador] O controlador está pronto a receber clientes!\n");
-
+    pthread_t thread_tempo;
+    if(pthread_create(&thread_tempo,NULL,gestor_tempo,NULL) != 0){
+        perror("[sistem]Erro a criar a thread");
+    }
 
     while (running) {
         Authentication a;
@@ -81,7 +94,7 @@ int main(int argc, char * argv[]){
         m.login = 0;
         strcpy(m.msg,"");
 
-        printf("[controlador] A receber Usernames: \n");
+        printf("[controlador: %ds] A receber Usernames: \n",tempo);
         int nbytes = read(fd, &a, sizeof(a));
         
         if (access(a.fifo_name, F_OK) != 0) {

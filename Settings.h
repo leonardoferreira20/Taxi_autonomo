@@ -8,6 +8,7 @@
 #define MAXCLI 1
 #define USERNAME_SIZE 20
 #define MAXVEICULO 20
+#define TEMPO_INICIAL 0
 
 #include <fcntl.h>
 #include <sys/types.h>
