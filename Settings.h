@@ -95,7 +95,10 @@ typedef struct {
 typedef struct {
 	char username[MAX_USERNAME];
 	char fifo_name[MAX_MSG];
+	int pid;
+	int distancia;
 	int ativo;
+	int pagou;
 	//int em_viagem;              // 1 se está em viagem, 0 caso contrário
 	//int servico_ativo;          // ID do serviço em execução (-1 se nenhum)
 } Utilizador;

@@ -1,7 +1,8 @@
 #include "Settings.h"
-
 int running = 1;
 int tempo = TEMPO_INICIAL;
+Utilizador utilizadores[MAXCLI];
+int nClientes = 0;
 
 void thread_id(Authentication *a){
     printf("[%s Thread %d]",a->username,a->pid);
@@ -75,7 +76,6 @@ int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nC
 
 int main(int argc, char * argv[]){
     char clientesAtivos[MAXCLI][20];
-    int nClientes = 0;
     char login[20];
     int erro=0; //Experiencia
     int TotalServicos = 0;
@@ -98,9 +98,9 @@ int main(int argc, char * argv[]){
         exit(-1);
     }
 
-    printf("\n--------------------------------------------------------\n");
-    printf("\n              SISTEMA DE TÁXIS AUTÓNOMOS                \n");
-    printf("\n--------------------------------------------------------\n\n");
+    printf("\n----------------------------------------------------------------------------\n");
+    printf("\n                        SISTEMA DE TÁXIS AUTÓNOMOS                          \n");
+    printf("\n----------------------------------------------------------------------------\n\n");
 
     if (access(SERVERFIFO, F_OK) == 0) {
         printf("[CONTROLADOR] O servidor ja se encontra em execucao\n");
@@ -133,7 +133,7 @@ int main(int argc, char * argv[]){
     }
 
     while (running) {
-        Authentication auth;
+        //Authentication auth; nao esta a fazer nada
         Mensagem pedido;
         Mensagem resp;
 
@@ -141,7 +141,7 @@ int main(int argc, char * argv[]){
         if (nbytes == -1) {
             if (errno != EINTR) {
             perror("[CONTROLADOR] Erro na leitura do pedido!\n");
-            }else{
+            }else{ //Este é o erro do sinal!
             perror("[CONTROLADOR] Encerrar a leitura de mensagens!\n");
             }
         break;
@@ -151,7 +151,7 @@ int main(int argc, char * argv[]){
             totalTentativasLigacao++;///****estatistica*****
             resp.tipo = MSG_RESPOSTA;
             strcpy(resp.fifo_name,pedido.fifo_name); //ATRIBUIR FIFO Á RESPOSTA
-            strcpy(resp.username,pedido.fifo_name); //ATRIBUIR USERNAME Á RESPOSTA
+            strcpy(resp.username,pedido.username); //ATRIBUIR USERNAME Á RESPOSTA
             if (pedido.tipo == MSG_LOGIN){
                 int fd_cliente = open(pedido.fifo_name, O_RDWR);
                 if (fd_cliente == -1) {
@@ -159,7 +159,7 @@ int main(int argc, char * argv[]){
                     close (fd_cliente);
                     continue;
                 }else{
-                    memset(&resp, 0, sizeof(resp));
+                    memset(&resp, 0, sizeof(resp)); //VER MAIS TARDE PODE DAR PROBLEMAS
                     resp.tipo = MSG_RESPOSTA;
                     resp.login = LOGIN_REJEITADO; //Valor por omissao! nao sei se vale a pena    
                     if(nClientes < MAXCLI && verficaClienteRegistado(clientesAtivos, pedido.username, nClientes) == 0){
@@ -170,38 +170,34 @@ int main(int argc, char * argv[]){
 
                         resp.login = LOGIN_ACEITE;
                         strcpy(resp.msg, "Login aceite!"); //ATRIBUIR LOGIN ACEITE NA MENSAGEM
-                    }
-                    else if (nClientes >= MAXCLI ) {
+                    }else if (nClientes >= MAXCLI ) {
                         totalUtilizadoresRejeitados++;
                         printf("[CONTROLADOR] Cliente nao aceite\n");
-                        resp.login = LOGIN_REJEITADO;
                         strcpy(resp.msg, "Limite de utilizadores atingido");
-                    }
-                    else {
+                    }else {
                         printf("[CONTROLADOR] Cliente nao aceite\n");
-                        resp.login = LOGIN_REJEITADO;
                         strcpy(resp.msg, "Username já em uso");
                     }
                 }
-            write(fd_cliente, &resp, sizeof(resp));
-            close(fd_cliente);
+                write(fd_cliente, &resp, sizeof(resp));
+                close(fd_cliente);
             }else{ ////AQUI VÊM PARAR AS MENSAGENS SEM SER DE LOGIN (NECESSARIO CRIAR VERIFICACOES PARA VER SE O UTILIZADOR É O MESMO QUE SE LOGOU "MAN IN THE MIDDLE")
                 imprimirTipoDePedido(pedido.tipo);
                 switch(pedido.tipo){
                     case MSG_AGENDAR:
-                    printf("Funcao Agendar\n");
+                    printf("\n----> Funcao Agendar\n");
                     break;
                     case MSG_CONSULTAR:
-                    printf("Funcao Consultar\n");
+                    printf("\n----> Funcao Consultar\n");
                     break;
                     case MSG_CANCELAR:
-                    printf("Funcao Cancelar\n");
+                    printf("\n----> Funcao Cancelar\n");
                     break;
                     case MSG_TERMINAR:
-                    printf("Funcao Terminar\n");
+                    printf("\n----> Funcao Terminar\n");
                     break;
                     default: 
-                    printf("Comando inválido!");
+                    printf("\n ----> Comando inválido!");
                     break;
                 }
             }
@@ -215,18 +211,32 @@ int main(int argc, char * argv[]){
     
     /* Encerrar os clientes no array de clientes - enviar mensagem a cada um deles
     for(int i = 0; i < nClientes;i++){
-
+        
     }
 
     */
     close(fd_servidor);
     unlink(SERVERFIFO);
+
+    printf("\n------------------------------------INFO------------------------------------\n\n");
     printf("[SISTEMA] Servico esteve em execucao durante: %d segundos!\n",tempo);
     printf("[SISTEMA] Servico recebeu %d tentativas de ligacao!\n",totalTentativasLigacao);
     printf("[SISTEMA] Dessas tentativas de ligacao:\n");
-    printf("[SISTEMA] Servico rejeitou %d utilizadores!\n",totalUtilizadoresRejeitados);
-    printf("[SISTEMA] Servico autenticou %d utilizadores!\n",totalUtilizadoresLigados);
+    printf("             >Servico rejeitou %d utilizadores!\n",totalUtilizadoresRejeitados);
+    printf("             >Servico autenticou %d utilizadores!\n",totalUtilizadoresLigados);
     printf("[SISTEMA] Servico efetuou %d viagens!\n",TotalServicos);
-    printf("[SISTEMA] Encerrado.\n");
+    printf("\n----------------------------------ENCERRAR----------------------------------\n");
+    printf("[SISTEMA] Encerrado.");
+    printf("\n----------------------------------------------------------------------------\n");
+    printf("\n\n");
+
+    printf("        ____________________________\n");
+    printf("   ____/   TAXI            _        \\___\n");
+    printf(" _/   _   _____________   |_|   ___    _\\_\n");
+    printf("/____|_| |             |______|   |____|__\\\n");
+    printf("(  O )    \\___________/        \\___/   ( O )\n");
+    printf("    \\\\------------------------------------//\n");
+    printf("      ~~~     ~~~~~      ~~~~      ~~~~ \n");
+    printf("         ~~~~      ~~~~~      ~~~~~\n");
     return 0;
 }
