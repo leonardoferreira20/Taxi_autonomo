@@ -12,6 +12,7 @@
 
 int controlador_ativo = 1;
 
+
 // ALTERAR
 ComandoParsed parsear_comando(const char *linha) {
     ComandoParsed cmd;
@@ -140,7 +141,7 @@ ComandoParsed parsear_comando(const char *linha) {
 void handler_pipe(int sig) {
     (void)sig;
     controlador_ativo = 0;
-    printf("\n[CLIENTE] Controlador terminou. A encerrar...\n");
+    printf("\n[CLIENTE] A interromper cliente ....\n");
 }
 
 // MOSTRAR MENU DE COMANDOS
@@ -173,7 +174,7 @@ int enviar_agendar(int fd, const char *username, int hora, const char *local, in
         return -1;
     }
     
-    printf("[CLIENTE] Pedido de agendamento enviado\n");
+    printf("[CLIENTE] ✓ Pedido de agendamento enviado\n");
     return 0;
 }
 
@@ -272,8 +273,14 @@ int main(int argc, char* argv[]){
 
     char * username;
     char private_fifo[MAX_MSG];
-    Authentication auth;
-    Mensagem msg;
+    Mensagem pedido;
+    Mensagem resposta;
+
+    struct sigaction sa;
+    sa.sa_handler = handler_pipe;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_SIGINFO;
+    sigaction(SIGINT, &sa, NULL);
 
     // VERIFICACAO DE NUMERO DE ARGUMENTOS
     if (argc != 2){
@@ -306,9 +313,7 @@ int main(int argc, char* argv[]){
     
     // CRIAR FIFO PRIVADO PARA O CLIENTE
     snprintf(private_fifo, sizeof(private_fifo), "%s%s_%d", CLIENTE_FIFO_PREFIX, username, getpid());
-    
-    unlink(private_fifo);
-    
+       
     if( mkfifo(private_fifo, 0666) == -1 ){
         perror("[CLIENTE] Erro a criar pipe do cliente!\n");
         exit(-1);
@@ -316,7 +321,7 @@ int main(int argc, char* argv[]){
 
     printf("[CLIENTE] FIFO privado criado: %s\n", private_fifo);
 
-    signal(SIGPIPE, handler_pipe);
+    //signal(SIGPIPE, handler_pipe);
 
     // ABRIR FIFO DO CONTROLADOR
     // DEFINIDO NAS SETTINGS O NOME DO SERVIDOR
@@ -331,20 +336,20 @@ int main(int argc, char* argv[]){
     printf("[CLIENTE] Conectado ao controlador.\n");
 
     // ENVIAR PEDIDO DE LOGIN
-    strncpy(auth.username, username, MAX_USERNAME - 1);
-    auth.username[MAX_USERNAME - 1] = '\0';
-    auth.pid = getpid();
-    strncpy(auth.fifo_name, private_fifo, MAX_MSG - 1);
-    auth.fifo_name[MAX_MSG - 1] = '\0';
+    strncpy(pedido.username, username, MAX_USERNAME - 1);
+    pedido.username[MAX_USERNAME - 1] = '\0';
+    pedido.pid = getpid();
+    strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
+    pedido.fifo_name[MAX_MSG - 1] = '\0';
 
-    if (write(fd_controlador, &auth, sizeof(auth)) == -1) {
+    if (write(fd_controlador, &pedido, sizeof(pedido)) == -1) {
         perror("[CLIENTE] Erro ao enviar login");
         close(fd_controlador);
         unlink(private_fifo);
         exit(1);
     }
     
-    printf("[CLIENTE] Pedido de login enviado. A aguardar validação...\n");
+    printf("[CLIENTE] ✓ Pedido de login enviado. A aguardar validação...\n");
 
     // ABRIR FIFO PRIVADO PARA LEITURA
     int fd_privado = open(private_fifo, O_RDONLY);
@@ -356,7 +361,7 @@ int main(int argc, char* argv[]){
     }
 
     // AGUARDAR RESPSOTA DO LOGIN
-    ssize_t nBytes = read(fd_privado, &msg, sizeof(msg));
+    ssize_t nBytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nBytes <= 0) {
         fprintf(stderr, "[CLIENTE] Erro ao receber resposta do login\n");
         close(fd_privado);
@@ -365,10 +370,10 @@ int main(int argc, char* argv[]){
         exit(1);
     }
 
-    if (msg.login == LOGIN_REJEITADO) {
+    if (resposta.login == LOGIN_REJEITADO) {
         printf("\n");
         printf("LOGIN REJEITADO\n");
-        printf("> ERRO: %s\n", msg.msg);
+        printf("> ERRO: %s\n", resposta.msg);
         printf("\n");
         close(fd_privado);
         close(fd_controlador);
@@ -379,7 +384,7 @@ int main(int argc, char* argv[]){
     printf("\n");
     printf("LOGIN ACEITE\n");
     printf("> Bem-vindo, %-40s ║\n", username);
-    printf("  %s\n", msg.msg);
+    printf("  %s\n", resposta.msg);
     printf("\n");
 
     mostrar_ajuda();

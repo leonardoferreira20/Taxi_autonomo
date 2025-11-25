@@ -79,7 +79,10 @@ typedef struct {
 	EstadoLogin login;           // Só para respostas de login
 	char username[MAX_USERNAME]; // Quem envia
 	char msg[MAX_MSG];           // Mensagem/feedback textual
-	
+	char fifo_name[MAX_MSG];
+	int pid;
+	int tempo_viagem;
+
 	// Campos específicos (usar conforme o tipo)
 	int hora;
 	char local[MAX_LOCAL];

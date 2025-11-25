@@ -43,7 +43,7 @@ endif
 	./$(CLIENTE) $(nome)
 
 clean:
-	rm -f *.o $(CONTROLADOR) $(CLIENTE) $(VEICULO) fifo_* fifo*
-
+	rm -f *.o $(CONTROLADOR) $(CLIENTE) $(VEICULO)
+	rm -f fifo_* fifo* cli_*
 
 
