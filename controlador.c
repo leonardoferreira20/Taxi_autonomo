@@ -65,14 +65,22 @@ void imprimirTipoDePedido(TipoMensagem tipo){
 }
 
 
-int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nClientes){
+int verficaClienteRegistado (char *user, int pid){
     for(int i = 0; i < nClientes; i++){
-        if(strcmp(clientesAtivos[i], user)==0){
+        if(strcmp(utilizadores[i].username, user)==0){
             return 1;
         }
     }
     return 0;
 }
+
+void adicionaUtilizador (char *user,  char * fifo_name, int pid){
+    strcpy(utilizadores[nClientes].username, user);
+    strcpy(utilizadores[nClientes].fifo_name, fifo_name);
+    utilizadores[nClientes].pid = pid;
+    nClientes++;
+}
+
 
 int main(int argc, char * argv[]){
     char clientesAtivos[MAXCLI][20];
@@ -162,10 +170,9 @@ int main(int argc, char * argv[]){
                     memset(&resp, 0, sizeof(resp)); //VER MAIS TARDE PODE DAR PROBLEMAS
                     resp.tipo = MSG_RESPOSTA;
                     resp.login = LOGIN_REJEITADO; //Valor por omissao! nao sei se vale a pena    
-                    if(nClientes < MAXCLI && verficaClienteRegistado(clientesAtivos, pedido.username, nClientes) == 0){
+                    if(nClientes < MAXCLI && verficaClienteRegistado(pedido.username, pedido.pid) == 0){
                         printf("[CONTROLADOR] Cliente aceite! E este é o seu Username: %s\n", pedido.username);
-                        strcpy(clientesAtivos[nClientes], pedido.username);
-                        nClientes++;
+                        adicionaUtilizador(pedido.username,pedido.fifo_name, pedido.pid);
                         totalUtilizadoresLigados++;///****estatistica*****
 
                         resp.login = LOGIN_ACEITE;
@@ -230,13 +237,11 @@ int main(int argc, char * argv[]){
     printf("\n----------------------------------------------------------------------------\n");
     printf("\n\n");
 
-    printf("        ____________________________\n");
-    printf("   ____/   TAXI            _        \\___\n");
-    printf(" _/   _   _____________   |_|   ___    _\\_\n");
-    printf("/____|_| |             |______|   |____|__\\\n");
-    printf("(  O )    \\___________/        \\___/   ( O )\n");
-    printf("    \\\\------------------------------------//\n");
-    printf("      ~~~     ~~~~~      ~~~~      ~~~~ \n");
-    printf("         ~~~~      ~~~~~      ~~~~~\n");
+    printf("             _______\n");
+    printf("            //  ||\\ \\\n");
+    printf("      _____//___||_\\ \\___       ~ ~ ~ ~ ~~~~\n");
+    printf("    >=)  _          _    \\       ~ ~ ~ ~ ~~~~\n");
+    printf("      |_/ \\________/ \\___|       ~ ~ ~ ~ ~~~~\n");
+    printf("________\\_/________\\_/_________________________\n");
     return 0;
 }
