@@ -3,7 +3,6 @@
 int running = 1;
 int tempo = TEMPO_INICIAL;
 
-
 void thread_id(Authentication *a){
     printf("[%s Thread %d]",a->username,a->pid);
 }
@@ -16,7 +15,6 @@ void * gestor_tempo(void * arg){
     return NULL;
 }
 
-
 void * chat_clinte(void * arg){
     Authentication *a = (Authentication *) arg;
     Mensagem m;
@@ -24,7 +22,7 @@ void * chat_clinte(void * arg){
     
     int td = open(a->fifo_name,O_RDWR);
     if (td == -1) {
-        perror("[sistema] Erro na abertura do named pipe para leitura");
+        perror("[CONTROLADOR] Erro na abertura do named pipe para leitura");
         exit(EXIT_FAILURE);
     }
     printf("criei uma thread!\n");
@@ -39,8 +37,10 @@ void * chat_clinte(void * arg){
     return NULL;
 }
 
-
-
+void handler_sigint(int sig) {
+    printf("\n[CONTROLADOR] Sinal recebido. A terminar...\n");
+    running = 0;
+}
 
 int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nClientes){
     for(int i = 0; i < nClientes; i++){
@@ -52,98 +52,108 @@ int verficaClienteRegistado (char clientesAtivos [MAXCLI][20],char *user, int nC
 }
 
 int main(int argc, char * argv[]){
-    int cl;
     char clientesAtivos[MAXCLI][20];
     int nClientes = 0;
     char login[20];
 
-    //Verifica
-    if (argc!=1){
-        perror("[sistema] Numero invalido de parametros!\n");
+    // VERIFICA
+    if (argc != 1){
+        perror("[CONTROLADOR] Numero invalido de parametros!\n");
         exit(-1);
     }
 
+    printf("\n--------------------------------------------------------\n");
+    printf("\n              SISTEMA DE TÁXIS AUTÓNOMOS                \n");
+    printf("\n--------------------------------------------------------\n\n");
+
     if (access(SERVERFIFO, F_OK) == 0) {
-        printf("[sistema] O servidor ja se encontra em execucao\n");
+        printf("[CONTROLADOR] O servidor ja se encontra em execucao\n");
         exit(0);
     }
 
+    signal(SIGINT, handler_sigint);
+
     if (mkfifo(SERVERFIFO, 0666) == -1) {
         if (errno != EEXIST) {
-        perror("[sistema] Erro na criacao do named pipe");
+        perror("[CONTROLADOR] Erro na criacao do named pipe");
         exit(EXIT_FAILURE);
         }
     }
 
-    int fd = open(SERVERFIFO, O_RDWR);
-    if (fd == -1) {
-        perror("[sistema] Erro na abertura do named pipe para leitura");
+    int fd_servidor = open(SERVERFIFO, O_RDWR);
+    if (fd_servidor == -1) {
+        perror("[CONTROLADOR] Erro na abertura do named pipe para leitura");
         unlink(SERVERFIFO);
         exit(EXIT_FAILURE);
     }
 
-    printf("[controlador] O controlador está pronto a receber clientes!\n");
+    printf("[CONTROLADOR] Sistema iniciado!\n");
+    printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, terminar\n\n");
+    
+    // LANÇAR THREAD DE GESTÃO DO TEMPO
     pthread_t thread_tempo;
-    if(pthread_create(&thread_tempo,NULL,gestor_tempo,NULL) != 0){
-        perror("[sistem]Erro a criar a thread");
+    if(pthread_create(&thread_tempo, NULL, gestor_tempo, NULL) != 0){
+        perror("[CONTROLADOR] Erro a criar a thread");
     }
 
     while (running) {
-        Authentication a;
-        Mensagem m;
-        m.login = 0;
-        strcpy(m.msg,"");
+        Authentication auth;
+        Mensagem resp;
+        int nbytes = read(fd_servidor, &auth, sizeof(auth));
 
-        printf("[controlador: %ds] A receber Usernames: \n",tempo);
-        int nbytes = read(fd, &a, sizeof(a));
-        
-        if (access(a.fifo_name, F_OK) != 0) {
-        printf("[sistema] O Cliente não se encontra em execucao\n");
-        }
-
-        if (nbytes == -1) {
-            perror("[sistema] Ocorreu um erro na leitura do Username!\n");
-        }else{
-
-            cl = open(a.fifo_name, O_RDWR);
-            if (cl == -1) {
-            perror("[sistema] Erro na abertura do named pipe para leitura do cliente");
-            close (cl);
+        if (nbytes != -1) {
+            int fd_cliente = open(auth.fifo_name, O_RDWR);
+            if (fd_cliente == -1) {
+                perror("[CONTROLADOR] Erro na abertura do named pipe para leitura do cliente");
+                close (fd_cliente);
             }
 
-            if(nClientes <MAXCLI && verficaClienteRegistado(clientesAtivos, a.username, nClientes) == 0){
-                printf("[controlador] Cliente aceite! E este é o seu Username: %s\n", a.username);
-                strcpy(clientesAtivos[nClientes],a.username);
+            memset(&resp, 0, sizeof(resp));
+            resp.tipo = MSG_RESPOSTA;
+
+            if(nClientes < MAXCLI && verficaClienteRegistado(clientesAtivos, auth.username, nClientes) == 0){
+                printf("[CONTROLADOR] Cliente aceite! E este é o seu Username: %s\n", auth.username);
+                strcpy(clientesAtivos[nClientes], auth.username);
                 nClientes++;
 
-            strcpy(m.msg,"[controlador] Login verificado! Seja bem vindo!\n");
-            m.login = 1;
-            write(cl,&m,sizeof(m));
-            
-            //Uma variavel nao irá bastar
-            //Porque nos vamos poder ter 20 threads a funcionar ao mesmo tempo
-            //Muito provavelmente iremos precisar de um array de threads
-            //Porque no fim vaos ter de fazer join das threads
-            //Ou seja esperar que todas as threads terminem
-            pthread_t thread; 
-            
-            if(pthread_create(&thread,NULL,chat_clinte,&a) != 0){
-                perror("[sistem]Erro a criar a thread");
-            }
-
-
-            }else {
-            printf("[controlador] Cliente nao aceite\n");
-            strcpy(login, "falhou");
+                resp.login = LOGIN_ACEITE;
+                strcpy(resp.msg, "Login aceite!");
                 
-            write(cl,login,strlen(login)+1);
-            close(cl);
+                //Uma variavel nao irá bastar
+                //Porque nos vamos poder ter 20 threads a funcionar ao mesmo tempo
+                //Muito provavelmente iremos precisar de um array de threads
+                //Porque no fim vaos ter de fazer join das threads
+                //Ou seja esperar que todas as threads terminem
+                pthread_t thread; 
+                if(pthread_create(&thread, NULL, chat_clinte, &auth) != 0){
+                    perror("[CONTROLADOR] Erro a criar a thread");
+                }
             }
+            else if (nClientes >= MAXCLI ) {
+                printf("[CONTROLADOR] Cliente nao aceite\n");
+                resp.login = LOGIN_REJEITADO;
+                strcpy(resp.msg, "Limite de utilizadores atingido");
+            }
+            else {
+                printf("[CONTROLADOR] Cliente nao aceite\n");
+                resp.login = LOGIN_REJEITADO;
+                strcpy(resp.msg, "Username já em uso");
+            }
+
+            write(fd_cliente, &resp, sizeof(resp));
+            close(fd_cliente);
         }
+
+        usleep(50000); // 50ms
     }
 
-
-    close(fd);
+    printf("[CONTROLADOR] A encerrar...\n");
+    
+    pthread_join(thread_tempo, NULL);
+    
+    close(fd_servidor);
     unlink(SERVERFIFO);
+    
+    printf("[CONTROLADOR] Encerrado.\n");
     return 0;
 }

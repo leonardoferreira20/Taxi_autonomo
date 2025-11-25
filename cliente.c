@@ -10,222 +10,410 @@
 #include <ctype.h>
 #include <errno.h>
 
-int running = 1;
+int controlador_ativo = 1;
 
-//Funcao escreve o tipo de erro
-void comado_invalido(int invalido){
-    printf("-> Comando inválido\n");
-    if(invalido == 1){
-        printf("-> agendar <hora> <local> <distancia>\n");
-    } else if(invalido == 2){
-        printf("-> cancelar <id>\n");
-    } else if(invalido == 3){
-        printf("-> entrar <destino>\n");
-    }else if(invalido == 4){
-        printf("-> consultar\n");
-    } else if(invalido == 5){
-        printf("-> sair\n");
-    }else if(invalido == 6){
-        printf("-> terminar\n");
-    };
-}
-
-char* separa_palavras(const char * palavra, int *nargs){
-    char argumento[64];
-    //char* aux = palavra;
-/*
-    while(*aux == ' '){aux++;};
-    while(*aux != ' ' || *aux != '\0'){aux++;};
-    if(*aux != '\0'){*aux='\0';};
-
-    nargs++;
-*/
-}
-
-
-void leitura_comandos_cliente(const char * utilizador_cmd){
-    char cmd[MAXCMD];
-    char args[MAXCMD];
-    int tam, nargs;
-    char * comando;
-    char * argumento;
-
-    //copiar o array para uma string interna da funcao
-    strncpy(cmd, utilizador_cmd,sizeof(cmd));
-    //atribuir \0 no final para ter a certeza
-    cmd[sizeof(cmd)-1]='\0';
-
-    //meter um '\0' no lugar de um possivel \n caso a string seja mais pequena que o tamanho e registou o enter 
-    tam=strlen(cmd);
-    if(tam > 0 && cmd[tam -1]== '\n'){
-        cmd[tam-1]='\0';
+// ALTERAR
+ComandoParsed parsear_comando(const char *linha) {
+    ComandoParsed cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.valido = 0;
+    cmd.id = -1; // Valor inválido por defeito
+    
+    // Criar cópia da linha
+    char buffer[MAXCMD];
+    strncpy(buffer, linha, MAXCMD - 1);
+    buffer[MAXCMD - 1] = '\0';
+    
+    // Remover \n
+    buffer[strcspn(buffer, "\n")] = '\0';
+    
+    // Remover espaços iniciais
+    char *p = buffer;
+    while (*p == ' ' || *p == '\t') p++;
+    
+    // Se vazio, retornar inválido
+    if (*p == '\0') {
+        return cmd;
     }
-
-    //Ponteiro para a primeira posicao do cmd
-    char *aux = cmd;
-
-    //Salta espaços em branco
-    while(*aux==' '){
-        aux++;
+    
+    // Separar comando (primeira palavra)
+    char *saveptr;
+    char *token = strtok_r(p, " \t", &saveptr);
+    if (token == NULL) {
+        return cmd;
     }
-
-    //Salta fora do programa caso não tenha comando
-    if(*aux == '\0'){
-        printf("Comando invalido!\n");
-        return;
+    
+    // Copiar e converter para minúsculas
+    strncpy(cmd.comando, token, sizeof(cmd.comando) - 1);
+    for (int i = 0; cmd.comando[i]; i++) {
+        cmd.comando[i] = tolower(cmd.comando[i]);
     }
-
-    //ponteiro comando aponta para a posicao inicial do comando a verificar
-    comando = aux;
-
-    //avança o ponteiro até ao final da paralvra
-    while (*aux != '\0' && *aux != ' '){
-        aux++;
-    }
-
-    //caso seja diferente de /0 mete um /0 (isto é para os comandos que têm argumentos)
-    //caso não tenham argumentos nao vai entrar aqui porque ja tem /0 que metemos na linha 21
-    //ao entrar neste if quer dizer que tem argumentos por isso vamos ver onde começam para meter o ponteiro args para lá
-    if (*aux != '\0'){
-        *aux = '\0';
-        aux++;
-        while(*aux == ' '){
-            aux++;
+    
+    // ========== PARSE ESPECÍFICO POR COMANDO ==========
+    
+    if (strcmp(cmd.comando, "agendar") == 0) {
+        // agendar <hora> <local> <distancia>
+        
+        token = strtok_r(NULL, " \t", &saveptr);
+        if (token == NULL) {
+            printf("[CLIENTE] Erro: falta argumento <hora>\n");
+            printf("Uso: agendar <hora> <local> <distancia>\n");
+            return cmd;
         }
-        if(*aux != '\0'){
-            argumento = aux;
-        }else
-            argumento = NULL;
+        cmd.hora = atoi(token);
+        if (cmd.hora < 0) {
+            printf("[CLIENTE] Erro: hora inválida\n");
+            return cmd;
+        }
+        
+        token = strtok_r(NULL, " \t", &saveptr);
+        if (token == NULL) {
+            printf("[CLIENTE] Erro: falta argumento <local>\n");
+            printf("Uso: agendar <hora> <local> <distancia>\n");
+            return cmd;
+        }
+        strncpy(cmd.local, token, MAX_LOCAL - 1);
+        
+        token = strtok_r(NULL, " \t", &saveptr);
+        if (token == NULL) {
+            printf("[CLIENTE] Erro: falta argumento <distancia>\n");
+            printf("Uso: agendar <hora> <local> <distancia>\n");
+            return cmd;
+        }
+        cmd.distancia = atoi(token);
+        if (cmd.distancia <= 0) {
+            printf("[CLIENTE] Erro: distância inválida\n");
+            return cmd;
+        }
+        
+        cmd.valido = 1;
+        
+    } else if (strcmp(cmd.comando, "consultar") == 0) {
+        // consultar (sem argumentos)
+        cmd.valido = 1;
+        
+    } else if (strcmp(cmd.comando, "cancelar") == 0) {
+        // cancelar <id>
+        
+        token = strtok_r(NULL, " \t", &saveptr);
+        if (token == NULL) {
+            printf("[CLIENTE] Erro: falta argumento <id>\n");
+            printf("Uso: cancelar <id>  (0 = cancelar todos)\n");
+            return cmd;
+        }
+        cmd.id = atoi(token);
+        
+        cmd.valido = 1;
+        
+    } else if (strcmp(cmd.comando, "entrar") == 0) {
+        // entrar <destino>
+        
+        token = strtok_r(NULL, " \t", &saveptr);
+        if (token == NULL) {
+            printf("[CLIENTE] Erro: falta argumento <destino>\n");
+            printf("Uso: entrar <destino>\n");
+            return cmd;
+        }
+        strncpy(cmd.destino, token, MAX_DESTINO - 1);
+        
+        cmd.valido = 1;
+        
+    } else if (strcmp(cmd.comando, "sair") == 0) {
+        // sair (sem argumentos)
+        cmd.valido = 1;
+        
+    } else if (strcmp(cmd.comando, "terminar") == 0) {
+        // terminar (sem argumentos)
+        cmd.valido = 1;
+        
+    } else {
+        // Comando desconhecido
+        printf("[CLIENTE] Comando desconhecido: %s\n", cmd.comando);
+        return cmd;
     }
-
-
-    if(strcasecmp(cmd,"agendar")==0){
-        if(nargs!=3) comado_invalido(1);
-        //COMANDO AGENDAR
-
-    }else if (strcasecmp(cmd,"cancelar")==0){
-        if(nargs!=1) comado_invalido(2);
-        //COMANDO CANCELAR
-    }else if (strcasecmp(cmd,"entrar")==0){
-        if(nargs!=1) comado_invalido(3);
-        //COMANDO ENTRAR
-    }else if (strcasecmp(cmd,"consultar")==0){
-                if(args !=NULL) comado_invalido(4);
-        //COMANDO CONSULTAR
-    }else if (strcasecmp(cmd,"sair")==0){
-        if(args !=NULL) comado_invalido(5);
-        //COMANDO SAIR
-    }else if (strcasecmp(cmd,"terminar")==0){
-        if(args !=NULL) comado_invalido(6);
-        //COMANDO TERMINAR
-    }else printf("Comando invalido!\n");
-
+    
+    return cmd;
 }
 
 
+// HANDLER PARA DETETAR MORTE DO CONTROLADOR (SIGPIPE)
+void handler_pipe(int sig) {
+    (void)sig;
+    controlador_ativo = 0;
+    printf("\n[CLIENTE] Controlador terminou. A encerrar...\n");
+}
 
+// MOSTRAR MENU DE COMANDOS
+void mostrar_ajuda() {
+    printf("\n-------------------------------------------------------\n");
+    printf("\n                 COMANDOS DISPONÍVEIS                  \n");
+    printf("\n-------------------------------------------------------\n");
+    printf("\t> agendar <hora> <local> <distancia>\n");
+    printf("\t> consultar\n");
+    printf("\t> cancelar <id>     (0 = cancelar todos)\n");
+    printf("\t> entrar <destino>\n");
+    printf("\t> sair\n");
+    printf("\t> terminar");
+    printf("\n-------------------------------------------------------\n");
+}
 
+// COMANDO AGENDAR
+int enviar_agendar(int fd, const char *username, int hora, const char *local, int distancia) {
+    Mensagem msg;
+    memset(&msg, 0, sizeof(msg));
+    
+    msg.tipo = MSG_AGENDAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    msg.hora = hora;
+    strncpy(msg.local, local, MAX_LOCAL - 1);
+    msg.distancia = distancia;
+    
+    if (write(fd, &msg, sizeof(msg)) == -1) {
+        perror("[CLIENTE] Erro ao enviar comando agendar");
+        return -1;
+    }
+    
+    printf("[CLIENTE] Pedido de agendamento enviado\n");
+    return 0;
+}
+
+// COMANDO CONSULTAR
+int enviar_consultar(int fd, const char *username) {
+    Mensagem msg;
+    memset(&msg, 0, sizeof(msg));
+    
+    msg.tipo = MSG_CONSULTAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    
+    if (write(fd, &msg, sizeof(msg)) == -1) {
+        perror("[CLIENTE] Erro ao enviar comando consultar");
+        return -1;
+    }
+    
+    printf("[CLIENTE] ✓ Pedido de consulta enviado\n");
+    return 0;
+}
+
+// COMANDO CANCELAR
+int enviar_cancelar(int fd, const char *username, int id) {
+    Mensagem msg;
+    memset(&msg, 0, sizeof(msg));
+    
+    msg.tipo = MSG_CANCELAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    msg.servico_id = id;
+    
+    if (write(fd, &msg, sizeof(msg)) == -1) {
+        perror("[CLIENTE] Erro ao enviar comando cancelar");
+        return -1;
+    }
+    
+    if (id == 0) {
+        printf("[CLIENTE] ✓ Pedido para cancelar todos os serviços enviado\n");
+    } else {
+        printf("[CLIENTE] ✓ Pedido para cancelar serviço #%d enviado\n", id);
+    }
+    return 0;
+}
+
+// COMANDO TERMINAR
+int enviar_terminar(int fd, const char *username) {
+    Mensagem msg;
+    memset(&msg, 0, sizeof(msg));
+    
+    msg.tipo = MSG_TERMINAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    
+    if (write(fd, &msg, sizeof(msg)) == -1) {
+        perror("[CLIENTE] Erro ao enviar comando terminar");
+        return -1;
+    }
+    
+    printf("[CLIENTE] ✓ Pedido de término enviado\n");
+    return 0;
+}
+
+int processar_comando(ComandoParsed *cmd, int fd_controlador, const char *username) {
+    
+    if (strcmp(cmd->comando, "agendar") == 0) {
+        return enviar_agendar(fd_controlador, username, cmd->hora, cmd->local, cmd->distancia);
+        
+    } else if (strcmp(cmd->comando, "consultar") == 0) {
+        return enviar_consultar(fd_controlador, username);
+        
+    } else if (strcmp(cmd->comando, "cancelar") == 0) {
+        return enviar_cancelar(fd_controlador, username, cmd->id);
+        
+    } else if (strcmp(cmd->comando, "entrar") == 0) {
+        // TODO: Enviar para veículo (não controlador)
+        printf("[CLIENTE] TODO: enviar 'entrar' para veículo\n");
+        return 0;
+        
+    } else if (strcmp(cmd->comando, "sair") == 0) {
+        // TODO: Enviar para veículo (não controlador)
+        printf("[CLIENTE] TODO: enviar 'sair' para veículo\n");
+        return 0;
+        
+    } else if (strcmp(cmd->comando, "terminar") == 0) {
+        // Verificar se está em serviço
+        /* if (em_servico) {
+            printf("[CLIENTE] Não pode terminar enquanto está em serviço!\n");
+            printf("[CLIENTE] Aguarde o fim da viagem ou use 'sair'\n");
+            return -1;
+        } */
+        return enviar_terminar(fd_controlador, username);
+    }
+    
+    return 0;
+}
 
 int main(int argc, char* argv[]){
-    
     setbuf(stdout, NULL);
 
-    char acesso[20]; //mensagem de acesso valido ou invalido
-    char cmd[MAXCMD];
-    Mensagem m;//mensagem campo estrutura
-    Authentication a;
-    char login [20];
+    char * username;
+    char private_fifo[MAX_MSG];
+    Authentication auth;
+    Mensagem msg;
 
-    //Verificacao de numero de argumentos
-    if (argc!=2){
+    // VERIFICACAO DE NUMERO DE ARGUMENTOS
+    if (argc != 2){
         perror("Numero invalido de parametros!\n");
-        exit(-1);
+        exit(1);
     }
+
+    printf("[CLIENTE] Controlador detetado.\n");
+
+    // ATRIBUIR NOME DO UTILIZADOR E VALIDAR SE ULTRAPASSA O MÁXIMO DEFINIDO 
+    // Escrita para o servidor autenticacao
+    // Cliente envia o seu username para o servidor para se autenticar
+    // Se não existir outro utilizador com este username e ainda houver espaço para o utilizador (servidor tem numeo maximo de utilizadores) O login é bem sucedido
+    // write(fd,argv[1],strlen(argv[1])+1);
+
+    username = argv[1];
+
+    if (strlen(username) >= MAX_USERNAME) {
+        fprintf(stderr, "[CLIENTE] ERRO: Username demasiado longo (max %d)\n", MAX_USERNAME - 1);
+        exit(1);
+    }
+    
+    printf("[CLIENTE] Utilizador: %s\n", username);
 
     if (access(SERVERFIFO, F_OK) != 0) {
-        printf("[sistema] O servidor não se encontra em execucao\n");
-        exit(-1);
-    }else{
-        printf("[sistema] O servidor ja se encontra em execucao\n");
-    }
-
-    //Defenido nas settings o nome do servidor
-    //Acesso ao pipe aberto pelo servidor (já deve estar aberto do lado do servidor)
-    int fd = open(SERVERFIFO, O_RDWR);
-    //verificar se abriu o pipe
-    if(fd < 0){
-        perror("Erro ao abrir pipe do servidor!\n");
-        exit(-1);
+        fprintf(stderr, "[CLIENTE] ERRO: Controlador não está ativo!\n");
+        fprintf(stderr, "[CLIENTE] Por favor, inicie o controlador primeiro.\n");
+        exit(1);
     }
     
-    //Escrita para o servidor autenticacao
-    //Cliente envia o seu username para o servidor para se autenticar
-    //Se não existir outro utilizador com este username e ainda houver espaço para o utilizador (servidor tem numeo maximo de utilizadores) O login é bem sucedido
-    //write(fd,argv[1],strlen(argv[1])+1);
-
-    strcpy(a.username,argv[1]);
-    a.pid = getpid();
-    snprintf(a.fifo_name, sizeof(a.fifo_name), "fifo_%s_%d", argv[1],a.pid);
-    //Criar pipe do cliente com o nome do cliente
-    if(mkfifo(a.fifo_name,0666) == -1){
-        perror("Erro a criar pipe do cliente!\n");
-        exit(-1);
-    };
-
-    //Abrir pipe do cliente para receber mensagens do servidor
-    int rd = open(a.fifo_name, O_RDWR);
-    if(rd == -1){
-        perror("Erro a abrir namedpipe do cliente!\n");
-        close(fd);
-        exit(-1);
-    }
-
-    write(fd,&a,sizeof(a));
-
-    //read (valido invalido)
-    int nbytes= read(rd,&m,sizeof(m));
-
-    if(m.login==0){
-        printf("Login não foi bem sucedido!\nJá existe um Username com o mesmo nome ativo!\n");
-        close(fd);
-        close(rd);
-        unlink(a.fifo_name);
-        return 0;
-    }
-    printf("Login bem sucedido! Bem vindo!\n");
-    printf("%s",m.msg);
-
-    /*
-    //Verificar se o acesso é valido ou invalido (existe algum cliente com o mesmo nome)
-    //----------//Caso invalido terminar 
-    if(nbytes < 0){
-        perror("Erro acesso inválido!\n");
-        exit(-1);
-    }
-    */
-
-    while(running){
-        printf("-> Introduza comando: \n");
-        printf("-> ");
-        scanf("%s", cmd);
-        leitura_comandos_cliente(cmd);
-        nbytes = write(fd,&m,sizeof(m));
-	    
-        if(nbytes == -1){
-		    if(errno != EPIPE)
-			    perror("erro ao escrever a mensagem no pipe");
-		    close(fd);
-		    close(rd);
-		    unlink(a.fifo_name);
-		    exit(EXIT_FAILURE);
-	    }
-
-        if(m.tipo_msg == 0) break;
-    }
-
+    // CRIAR FIFO PRIVADO PARA O CLIENTE
+    snprintf(private_fifo, sizeof(private_fifo), "%s%s_%d", CLIENTE_FIFO_PREFIX, username, getpid());
     
-    close(fd);
-    close(rd);
-    unlink(a.fifo_name);
+    unlink(private_fifo);
+    
+    if( mkfifo(private_fifo, 0666) == -1 ){
+        perror("[CLIENTE] Erro a criar pipe do cliente!\n");
+        exit(-1);
+    }
+
+    printf("[CLIENTE] FIFO privado criado: %s\n", private_fifo);
+
+    signal(SIGPIPE, handler_pipe);
+
+    // ABRIR FIFO DO CONTROLADOR
+    // DEFINIDO NAS SETTINGS O NOME DO SERVIDOR
+    // ACESSO AO PIPE ABERTO PELO SERVIDOR (JÁ DEVE ESTAR ABERTO DO LADO DO SERVIDOR)
+    int fd_controlador = open(SERVERFIFO, O_WRONLY);
+    if (fd_controlador == -1) {
+        perror("[CLIENTE] Erro ao conectar ao controlador");
+        unlink(private_fifo);
+        exit(1);
+    }
+    
+    printf("[CLIENTE] Conectado ao controlador.\n");
+
+    // ENVIAR PEDIDO DE LOGIN
+    strncpy(auth.username, username, MAX_USERNAME - 1);
+    auth.username[MAX_USERNAME - 1] = '\0';
+    auth.pid = getpid();
+    strncpy(auth.fifo_name, private_fifo, MAX_MSG - 1);
+    auth.fifo_name[MAX_MSG - 1] = '\0';
+
+    if (write(fd_controlador, &auth, sizeof(auth)) == -1) {
+        perror("[CLIENTE] Erro ao enviar login");
+        close(fd_controlador);
+        unlink(private_fifo);
+        exit(1);
+    }
+    
+    printf("[CLIENTE] Pedido de login enviado. A aguardar validação...\n");
+
+    // ABRIR FIFO PRIVADO PARA LEITURA
+    int fd_privado = open(private_fifo, O_RDONLY);
+    if (fd_privado == -1) {
+        perror("[CLIENTE] Erro ao abrir FIFO privado");
+        close(fd_controlador);
+        unlink(private_fifo);
+        exit(1);
+    }
+
+    // AGUARDAR RESPSOTA DO LOGIN
+    ssize_t nBytes = read(fd_privado, &msg, sizeof(msg));
+    if (nBytes <= 0) {
+        fprintf(stderr, "[CLIENTE] Erro ao receber resposta do login\n");
+        close(fd_privado);
+        close(fd_controlador);
+        unlink(private_fifo);
+        exit(1);
+    }
+
+    if (msg.login == LOGIN_REJEITADO) {
+        printf("\n");
+        printf("LOGIN REJEITADO\n");
+        printf("> ERRO: %s\n", msg.msg);
+        printf("\n");
+        close(fd_privado);
+        close(fd_controlador);
+        unlink(private_fifo);
+        exit(1);
+    }
+
+    printf("\n");
+    printf("LOGIN ACEITE\n");
+    printf("> Bem-vindo, %-40s ║\n", username);
+    printf("  %s\n", msg.msg);
+    printf("\n");
+
+    mostrar_ajuda();
+
+    char linha[MAXCMD];
+    int terminar = 0;
+    while (!terminar && controlador_ativo) {
+        printf("%s > ", username);
+        fflush(stdout);
+        
+        if (fgets(linha, sizeof(linha), stdin) == NULL) {
+            break;
+        }
+        
+        ComandoParsed cmd = parsear_comando(linha);
+        
+        if (!cmd.valido) {
+            continue;
+        }
+        
+        if (strcmp(cmd.comando, "terminar") == 0) {
+            if (processar_comando(&cmd, fd_controlador, username) == 0) {
+                terminar = 1;
+            }
+        } else {
+            processar_comando(&cmd, fd_controlador, username);
+        }
+    }
+    
+    printf("\n\n[CLIENTE] A terminar...\n");
+    close(fd_privado);
+    close(fd_controlador);
+    unlink(private_fifo);
+    printf("[CLIENTE] Desconectado.\n");
+
     return 0;
 }

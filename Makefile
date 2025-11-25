@@ -6,7 +6,6 @@ VEICULO = veiculo
 
 OBJS = controlador.o cliente.o veiculo.o
 
-
 all: $(CONTROLADOR) $(CLIENTE) $(VEICULO)
 
 # Compilar objectos
