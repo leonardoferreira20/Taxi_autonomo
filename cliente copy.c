@@ -159,76 +159,55 @@ void mostrar_ajuda() {
 }
 
 // COMANDO AGENDAR
-int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedido, int hora, const char *local, int distancia) {
+int enviar_agendar(int fd, const char *username, int hora, const char *local, int distancia) {
+    Mensagem msg;
+    //memset(&msg, 0, sizeof(msg));
+
+    msg.tipo = MSG_AGENDAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    msg.hora = hora;
+    strncpy(msg.local, local, MAX_LOCAL - 1);
+    msg.distancia = distancia;
     
-    pedido->tipo = MSG_AGENDAR;
-    pedido->hora = hora;
-    strncpy(pedido->local, local, MAX_LOCAL - 1);
-    pedido->local[MAX_LOCAL - 1] = '\0';
-    pedido->distancia = distancia;
-    
-    if (write(fd, pedido, sizeof(*pedido)) == -1) {
+    if (write(fd, &msg, sizeof(msg)) == -1) {
         perror("[CLIENTE] Erro ao enviar comando agendar");
         return -1;
     }
     
     printf("[CLIENTE] ✓ Pedido de agendamento enviado\n");
-
-    Mensagem resposta;
-    memset(&resposta, 0, sizeof(resposta));
-    usleep(TEMPODEASSINCRONAR);
-    int nbytes = read(fd_privado, &resposta, sizeof(resposta));
-    if (nbytes == -1) {
-        if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
-        }else{ //Este é o erro do sinal!
-            perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
-        }
-        return 0;
-    }
-    if(nbytes > 0){
-        printf("%s\n",resposta.msg);
-    }
-
     return 0;
 }
 
 // COMANDO CONSULTAR
-int enviar_consultar(int fd, int fd_privado, const char *username, Mensagem *pedido) {
+int enviar_consultar(int fd, const char *username) {
+    Mensagem msg;
+    //memset(&msg, 0, sizeof(msg));
+    char teste [15] = "teste";
+    strncpy(msg.fifo_name, teste, MAX_MSG - 1);
+    msg.fifo_name[MAX_MSG - 1] = '\0';
 
-    pedido->tipo = MSG_CONSULTAR;
-    if (write(fd, pedido, sizeof(*pedido)) == -1) {
+    msg.tipo = MSG_CONSULTAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    
+    if (write(fd, &msg, sizeof(msg)) == -1) {
         perror("[CLIENTE] Erro ao enviar comando consultar");
         return -1;
     }
     
     printf("[CLIENTE] ✓ Pedido de consulta enviado\n");
-
-    Mensagem resposta;
-    memset(&resposta, 0, sizeof(resposta));
-    usleep(100 * 10000);
-    int nbytes = read(fd_privado, &resposta, sizeof(resposta));
-    if (nbytes == -1) {
-        if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
-        }else{ //Este é o erro do sinal!
-            perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
-        }
-        return 0;
-    }
-    if(nbytes > 0){
-        printf("%s\n",resposta.msg);
-    }
     return 0;
 }
 
 // COMANDO CANCELAR
-int enviar_cancelar(int fd,int fd_privado, const char *username,Mensagem *pedido, int id) {
+int enviar_cancelar(int fd, const char *username, int id) {
+    Mensagem msg;
+    //memset(&msg, 0, sizeof(msg));
     
-    pedido->tipo = MSG_CANCELAR;
-    pedido->servico_id = id;
+    msg.tipo = MSG_CANCELAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    msg.servico_id = id;
     
-    if (write(fd, pedido, sizeof(*pedido)) == -1) {
+    if (write(fd, &msg, sizeof(msg)) == -1) {
         perror("[CLIENTE] Erro ao enviar comando cancelar");
         return -1;
     }
@@ -238,71 +217,36 @@ int enviar_cancelar(int fd,int fd_privado, const char *username,Mensagem *pedido
     } else {
         printf("[CLIENTE] ✓ Pedido para cancelar serviço #%d enviado\n", id);
     }
-
-    Mensagem resposta;
-    memset(&resposta, 0, sizeof(resposta));
-    usleep(100 * 10000);
-    int nbytes = read(fd_privado, &resposta, sizeof(resposta));
-    if (nbytes == -1) {
-        if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
-        }else{ //Este é o erro do sinal!
-            perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
-        }
-        return 0;
-    }
-    if(nbytes > 0){
-        printf("%s\n",resposta.msg);
-    }
-
     return 0;
 }
 
 // COMANDO TERMINAR
-int enviar_terminar(int fd, int fd_privado, const char *username, Mensagem *pedido) {
-    pedido->tipo = MSG_TERMINAR;
+int enviar_terminar(int fd, const char *username) {
+    Mensagem msg;
+    //memset(&msg, 0, sizeof(msg));
     
-    if (write(fd, pedido, sizeof(*pedido)) == -1) {
+    msg.tipo = MSG_TERMINAR;
+    strncpy(msg.username, username, MAX_USERNAME - 1);
+    
+    if (write(fd, &msg, sizeof(msg)) == -1) {
         perror("[CLIENTE] Erro ao enviar comando terminar");
         return -1;
     }
+    
     printf("[CLIENTE] ✓ Pedido de término enviado\n");
-    sleep(1);
-    Mensagem resposta_termino;
-    memset(&resposta_termino, 0, sizeof(resposta_termino));
-    usleep(100 * 10000);
-    int nbytes = read(fd_privado, &resposta_termino, sizeof(resposta_termino));
-    if (nbytes == -1) {
-        if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
-        }else{ //Este é o erro do sinal!
-            perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
-        }
-        return 0;
-    }
-    if(nbytes > 0){
-        if(resposta_termino.tipo == MSG_RECUSA){
-            printf("%s\n",resposta_termino.msg);
-            return 1;
-        }
-        printf("%d",resposta_termino.tipo);
-        printf("AQUI\n");
-        printf("%s\n",resposta_termino.msg);
-        printf("AQUI\n");
-    }
     return 0;
 }
 
-int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, const char *username, Mensagem *pedido) {
+int processar_comando(ComandoParsed *cmd, int fd_controlador, const char *username) {
     
     if (strcmp(cmd->comando, "agendar") == 0) {
-        return enviar_agendar(fd_controlador, fd_privado, username, pedido, cmd->hora, cmd->local, cmd->distancia);
+        return enviar_agendar(fd_controlador, username, cmd->hora, cmd->local, cmd->distancia);
         
     } else if (strcmp(cmd->comando, "consultar") == 0) {
-        return enviar_consultar(fd_controlador, fd_privado, username, pedido);
+        return enviar_consultar(fd_controlador, username);
         
     } else if (strcmp(cmd->comando, "cancelar") == 0) {
-        return enviar_cancelar(fd_controlador, fd_privado, username,pedido, cmd->id);
+        return enviar_cancelar(fd_controlador, username, cmd->id);
         
     } else if (strcmp(cmd->comando, "entrar") == 0) {
         // TODO: Enviar para veículo (não controlador)
@@ -321,7 +265,7 @@ int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, co
             printf("[CLIENTE] Aguarde o fim da viagem ou use 'sair'\n");
             return -1;
         } */
-        return enviar_terminar(fd_controlador,fd_privado, username, pedido);
+        return enviar_terminar(fd_controlador, username);
     }
     
     return 0;
@@ -330,14 +274,11 @@ int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, co
 int main(int argc, char* argv[]){
     setbuf(stdout, NULL);
 
-    int chave = 0;
     char * username;
     char private_fifo[MAX_MSG];
     Mensagem pedido;
     Mensagem resposta;
-    memset(&pedido, 0, sizeof(pedido));
-    memset(&resposta, 0, sizeof(resposta));
-    
+
     struct sigaction sa;
     sa.sa_handler = handler_pipe;
     sigemptyset(&sa.sa_mask);
@@ -401,10 +342,8 @@ int main(int argc, char* argv[]){
     strncpy(pedido.username, username, MAX_USERNAME - 1);
     pedido.username[MAX_USERNAME - 1] = '\0';
     pedido.pid = getpid();
-    pedido.chave = chave;
     strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
     pedido.fifo_name[MAX_MSG - 1] = '\0';
-    pedido.tipo = MSG_LOGIN;
 
     if (write(fd_controlador, &pedido, sizeof(pedido)) == -1) {
         perror("[CLIENTE] Erro ao enviar login");
@@ -425,7 +364,6 @@ int main(int argc, char* argv[]){
     }
 
     // AGUARDAR RESPSOTA DO LOGIN
-    usleep(100 * 10000);
     ssize_t nBytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nBytes <= 0) {
         fprintf(stderr, "[CLIENTE] Erro ao receber resposta do login\n");
@@ -435,7 +373,7 @@ int main(int argc, char* argv[]){
         exit(1);
     }
 
-    if (resposta.tipo == MSG_RECUSA) {
+    if (resposta.login == LOGIN_REJEITADO) {
         printf("\n");
         printf("LOGIN REJEITADO\n");
         printf("> ERRO: %s\n", resposta.msg);
@@ -452,23 +390,17 @@ int main(int argc, char* argv[]){
     printf("  %s\n", resposta.msg);
     printf("\n");
 
-    chave = resposta.chave;
-    printf("chave : %d", chave);
-    printf("chave : %d", resposta.chave);
     mostrar_ajuda();
 
     char linha[MAXCMD];
     int terminar = 0;
     while (!terminar && controlador_ativo) {
-        memset(&pedido, 0, sizeof(pedido));
-
         strncpy(pedido.username, username, MAX_USERNAME - 1);
         pedido.username[MAX_USERNAME - 1] = '\0';
         pedido.pid = getpid();
         strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
         pedido.fifo_name[MAX_MSG - 1] = '\0';
-        pedido.chave = chave;
-
+        
         printf("%s > ", username);
         fflush(stdout);
         
@@ -483,11 +415,11 @@ int main(int argc, char* argv[]){
         }
         
         if (strcmp(cmd.comando, "terminar") == 0) {
-            if (processar_comando(&cmd, fd_controlador, fd_privado, username, &pedido) == 0) {
+            if (processar_comando(&cmd, fd_controlador, username) == 0) {
                 terminar = 1;
             }
         } else {
-            processar_comando(&cmd, fd_controlador, fd_privado, username, &pedido);
+            processar_comando(&cmd, fd_controlador, username);
         }
     }
     

@@ -4,6 +4,10 @@ int tempo = TEMPO_INICIAL;
 Utilizador utilizadores[MAXCLI];
 int nClientes = 0;
 
+void thread_id(Authentication *a){
+    printf("[%s Thread %d]",a->username,a->pid);
+}
+
 void * gestor_tempo(void * arg){
     while(running){
         ++tempo;
@@ -37,49 +41,20 @@ void imprimirTipoDePedido(TipoMensagem tipo){
     }
 }
 
-/*POSSIVEL MELHORIA NA SEGURANCA
-void mudaChave(int i){
-    utilizadores[i].chave = tempo + utilizadores[i].pid;
-}
-*/
 
-int usernameLogado(char *user) {
-    for (int i = 0; i < nClientes; i++) {
-        if (strcmp(utilizadores[i].username, user) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-int verficaClienteRegistado (char *user, int pid, int chave){
+int verficaClienteRegistado (char *user, int pid){
     for(int i = 0; i < nClientes; i++){
         if(strcmp(utilizadores[i].username, user)==0){
-            if(utilizadores[i].chave == chave){
-                return i;
-            }
+            return i;
         }
     }
     return -1;
 }
-
-int verficaClienteRegistado (char *user, int pid, int chave){
-    for(int i = 0; i < nClientes; i++){
-        if(strcmp(utilizadores[i].username, user)==0){
-            if(utilizadores[i].chave == chave){
-                return i;
-            }
-        }
-    }
-    return -1;
-}
-
 
 void adicionaUtilizador (char *user,  char * fifo_name, int pid){
     strcpy(utilizadores[nClientes].username, user);
     strcpy(utilizadores[nClientes].fifo_name, fifo_name);
     utilizadores[nClientes].pid = pid;
-    utilizadores[nClientes].chave = tempo;
     utilizadores[nClientes].distancia = 0;
     utilizadores[nClientes].ativo = 1;
     utilizadores[nClientes].pagou = 1;
@@ -89,12 +64,13 @@ void adicionaUtilizador (char *user,  char * fifo_name, int pid){
     nClientes++;
 }
 
-void eliminaUtilizador(char * user,int indice){
-    if (indice == -1) {
+void eliminaUtilizador(char * user, char * fifo_name, int pid){
+    int cliente = verficaClienteRegistado(user,pid);
+    if (cliente == -1) {
         printf("[CONTROLADOR] Falha ao tentar remover utilizador não registado: %s\n", user);
         return;
     }
-    for(int i = indice; i < nClientes - 1; i++){
+    for(int i = cliente; i < nClientes - 1; i++){
         utilizadores[i] = utilizadores[i+1];
     }
     nClientes--;
@@ -157,115 +133,92 @@ int main(int argc, char * argv[]){
     printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, terminar\n\n");
 
     while (running) {
-    Mensagem pedido;
-    Mensagem resp;
-    memset(&pedido, 0, sizeof(pedido));
-    memset(&resp, 0, sizeof(resp));
+        Mensagem pedido;
+        Mensagem resp;
+        memset(&pedido, 0, sizeof(pedido));
+        memset(&resp, 0, sizeof(resp));
 
-    int nbytes = read(fd_servidor, &pedido, sizeof(pedido));
-    if (nbytes == -1) {
-        if (errno != EINTR) {
-            perror("[CONTROLADOR] Erro na leitura do pedido!");
-        } else { // interrupção por sinal (CTRL+C)
-            perror("[CONTROLADOR] Encerrar a leitura de mensagens!");
-        }
+        int nbytes = read(fd_servidor, &pedido, sizeof(pedido));
+        if (nbytes == -1) {
+            if (errno != EINTR) {
+            perror("[CONTROLADOR] Erro na leitura do pedido!\n");
+            }else{ //Este é o erro do sinal!
+            perror("[CONTROLADOR] Encerrar a leitura de mensagens!\n");
+            }
         break;
-    }
-
-    // Preparar resposta base
-    resp.tipo = MSG_RESPOSTA;
-    strcpy(resp.fifo_name, pedido.fifo_name); // ATRIBUIR FIFO À RESPOSTA
-    strcpy(resp.username, pedido.username);   // ATRIBUIR USERNAME À RESPOSTA
-
-    if (pedido.tipo == MSG_LOGIN) {
-
-        // --- LÓGICA DE LOGIN (sem write aqui) ---
-        resp.tipo = MSG_RECUSA; // por omissão
-        if (nClientes < MAXCLI && usernameLogado(pedido.username, pedido.pid, pedido.chave) == 0) {
-            printf("[CONTROLADOR] Cliente aceite! Username: %s\n", pedido.username);
-            adicionaUtilizador(pedido.username, pedido.fifo_name, pedido.pid);
-            resp.chave=utilizadores[nClientes-1].chave;
-
-            resp.tipo = MSG_ACEITA;
-            strcpy(resp.msg, "Login aceite!");
-        } else if (nClientes >= MAXCLI) {
-            totalUtilizadoresRejeitados++;
-            printf("[CONTROLADOR] Cliente nao aceite (limite atingido)\n");
-            strcpy(resp.msg, "Limite de utilizadores atingido");
-        } else {
-            totalUtilizadoresRejeitados++;
-            printf("[CONTROLADOR] Cliente nao aceite (username em uso)\n");
-            strcpy(resp.msg, "Username já em uso");
         }
 
-    } else {
-        // --- MENSAGENS NORMAIS (não-login) ---
-        imprimirTipoDePedido(pedido.tipo);
-        int indiceCliente = verficaClienteRegistado(pedido.username, pedido.pid, pedido.chave);
-        if (indiceCliente == -1) {
-            // cliente não autenticado
-            strcpy(resp.msg, "[Controlador] Utilizador não autenticado.");
-            resp.tipo = MSG_NAOAUTENTICADO;
-        } else {
-            resp.chave = utilizadores[indiceCliente].chave;
-            switch (pedido.tipo) {
-                case MSG_AGENDAR:
-                    resp.tipo = MSG_ACEITA;
+        if (nbytes > 0) {
+            totalTentativasLigacao++;///****estatistica*****
+            resp.tipo = MSG_RESPOSTA;
+            strcpy(resp.fifo_name,pedido.fifo_name); //ATRIBUIR FIFO Á RESPOSTA
+            strcpy(resp.username,pedido.username); //ATRIBUIR USERNAME Á RESPOSTA
+            if (pedido.tipo == MSG_LOGIN){
+                int fd_cliente = open(pedido.fifo_name, O_RDWR);
+                if (fd_cliente == -1) {
+                    perror("[CONTROLADOR] Erro na abertura do named pipe para leitura do cliente");
+                    continue;
+                }else{
+                    resp.tipo = MSG_RESPOSTA;
+                    resp.login = LOGIN_REJEITADO; //Valor por omissao 
+                    if(nClientes < MAXCLI && verficaClienteRegistado(pedido.username, pedido.pid) == -1){
+                        printf("[CONTROLADOR] Cliente aceite! E este é o seu Username: %s\n", pedido.username);
+                        adicionaUtilizador(pedido.username,pedido.fifo_name, pedido.pid);
+                        totalUtilizadoresLigados++;///****estatistica*****
+
+                        resp.login = LOGIN_ACEITE;
+                        strcpy(resp.msg, "Login aceite!"); //ATRIBUIR LOGIN ACEITE NA MENSAGEM
+                    }else if (nClientes >= MAXCLI ) {
+                        totalUtilizadoresRejeitados++;
+                        printf("[CONTROLADOR] Cliente nao aceite\n");
+                        strcpy(resp.msg, "Limite de utilizadores atingido");
+                    }else {
+                        printf("[CONTROLADOR] Cliente nao aceite\n");
+                        strcpy(resp.msg, "Username já em uso");
+                    }
+                }
+                write(fd_cliente, &resp, sizeof(resp));
+                close(fd_cliente);
+            }else{ ////AQUI VÊM PARAR AS MENSAGENS SEM SER DE LOGIN (NECESSARIO CRIAR VERIFICACOES PARA VER SE O UTILIZADOR É O MESMO QUE SE LOGOU "MAN IN THE MIDDLE")
+                int fd_cliente = open(pedido.fifo_name, O_RDWR);
+                if (fd_cliente == -1) {
+                    perror("[CONTROLADOR] aaa Erro na abertura do named pipe para leitura do cliente");
+                    continue;
+                }
+                imprimirTipoDePedido(pedido.tipo);
+                int indiceCliente = verficaClienteRegistado(pedido.username, pedido.pid);
+                
+                switch(pedido.tipo){
+                    case MSG_AGENDAR:
                     printf("\n----> Funcao Agendar\n");
-                    // TODO: implementar agendar
-                    char agendamento[MAX_MSG];
-                    sprintf(resp.msg, "[Controlador] Pedido de agendamento recebido: %dh local:%s distancia: %d", pedido.hora, pedido.local, pedido.distancia);
                     break;
-
-                case MSG_CONSULTAR:
-                    resp.tipo = MSG_CONSULTAR;
+                    case MSG_CONSULTAR:
                     printf("\n----> Funcao Consultar\n");
-                    // TODO: implementar consultar
-                    strcpy(resp.msg, "[Controlador] Pedido de consulta recebido.");
                     break;
-
-                case MSG_CANCELAR:
-                    resp.tipo = MSG_CANCELAR;
+                    case MSG_CANCELAR:
                     printf("\n----> Funcao Cancelar\n");
-                    // TODO: implementar cancelar
-                    strcpy(resp.msg, "[Controlador] Pedido de cancelamento recebido.");
                     break;
-                case MSG_TERMINAR:
-                    resp.tipo = MSG_TERMINAR;
-                    if (utilizadores[indiceCliente].pagou == 1 &&
-                        utilizadores[indiceCliente].em_viagem == 0 &&
-                        utilizadores[indiceCliente].servico_ativo == -1) {
-                        
-                        
-                        eliminaUtilizador(pedido.username,indiceCliente);
-                        strcpy(resp.msg, "[Controlador] Espero que tenha gostado dos nossos servicos! Volte sempre!");
-                        
-                        resp.tipo = MSG_ACEITA;
-                    } else {
-                        strcpy(resp.msg, "[Controlador] Não pode terminar agora (serviço ativo ou pagamento em falta).");
-                        resp.tipo = MSG_RECUSA;
+                    case MSG_TERMINAR:
+                    if(utilizadores[indiceCliente].pagou == 1 && utilizadores[indiceCliente].em_viagem == 0 && utilizadores[indiceCliente].servico_ativo == -1){
+                        eliminaUtilizador(pedido.username, pedido.fifo_name, pedido.pid);
+                        strcpy(resp.msg,"[Controlador] Espero que tenha gostado dos nossos servicos! Volte sempre!");
+                        resp.encerra = TERMINO_ACEITE;
+                    }else{
+                        strcpy(resp.msg,"[Controlador] Não pode terminar agora (serviço ativo ou pagamento em falta).");
+                        resp.encerra = TERMINO_REJEITADO;
                     }
                     break;
-                default:
-                    printf("\n ----> Comando inválido!\n");
-                    strcpy(resp.msg, "[Controlador] Comando inválido.");
+                    default: 
+                    printf("\n ----> Comando inválido!");
                     break;
+                }
+                write(fd_cliente, &resp, sizeof(resp));
+                close(fd_cliente);
             }
-        }
+        }else 
+            break;
+        printf("AQUI WHILE:%s\n",pedido.fifo_name);
     }
-    // --- ÚNICO WRITE: enviar resposta ao FIFO do cliente ---
-    int fd_cliente = open(pedido.fifo_name, O_WRONLY);
-    if (fd_cliente == -1) {
-        perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita");
-        // não conseguimos responder, mas não rebentamos o servidor
-    } else {
-        if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
-            perror("[CONTROLADOR] Erro ao enviar resposta ao cliente");
-        }
-        close(fd_cliente);
-    }
-}
-
 
     printf("[CONTROLADOR] A encerrar...\n");
     

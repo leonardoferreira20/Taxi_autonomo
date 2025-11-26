@@ -19,6 +19,7 @@
 #define MAXCLI 30
 #define MAX_VEHICLES 10
 #define MAX_SERVICES 200
+#define TEMPODEASSINCRONAR 100 * 1000
 
 #define MAX_USERNAME 50
 #define MAX_LOCAL 100
@@ -52,19 +53,18 @@ typedef struct authentication {
 } Authentication; */
 
 typedef enum {
-	MSG_LOGIN = 0,
-	MSG_AGENDAR = 1,
-	MSG_CONSULTAR = 2,
-	MSG_CANCELAR = 3,
-	MSG_RESPOSTA = 4,
-	MSG_TERMINAR = 5,
-	MSG_NOTIFICACAO = 6
+	MSG_LIMPA = 0,
+	MSG_LOGIN = 1,
+	MSG_AGENDAR = 2,
+	MSG_CONSULTAR = 3,
+	MSG_CANCELAR = 4,
+	MSG_RESPOSTA = 5,
+	MSG_TERMINAR = 6,
+	MSG_NOTIFICACAO = 7,
+	MSG_ACEITA = 8,
+	MSG_RECUSA = 9,
+	MSG_NAOAUTENTICADO = 10
 } TipoMensagem;
-
-typedef enum {
-	LOGIN_REJEITADO = 0,
-	LOGIN_ACEITE = 1
-} EstadoLogin;
 
 // AUTENTICAÇÃO
 typedef struct {
@@ -76,13 +76,14 @@ typedef struct {
 // MENSAGEM
 typedef struct {
 	TipoMensagem tipo;
-	EstadoLogin login;           // Só para respostas de login
 	char username[MAX_USERNAME]; // Quem envia
 	char msg[MAX_MSG];           // Mensagem/feedback textual
 	char fifo_name[MAX_MSG];
+	int chave;
 	int pid;
 	int tempo_viagem;
-
+	char resposta[MAX_MSG];
+	
 	// Campos específicos (usar conforme o tipo)
 	int hora;
 	char local[MAX_LOCAL];
@@ -95,12 +96,13 @@ typedef struct {
 typedef struct {
 	char username[MAX_USERNAME];
 	char fifo_name[MAX_MSG];
+	int chave;
 	int pid;
 	int distancia;
 	int ativo;
 	int pagou;
-	//int em_viagem;              // 1 se está em viagem, 0 caso contrário
-	//int servico_ativo;          // ID do serviço em execução (-1 se nenhum)
+	int em_viagem;              // 1 se está em viagem, 0 caso contrário
+	int servico_ativo;          // ID do serviço em execução (-1 se nenhum)
 } Utilizador;
 
 // COMANDOS - CLIENTE
@@ -113,8 +115,6 @@ typedef struct {
 	char destino[MAX_DESTINO];
 	int valido;                 // 1=válido, 0=inválido
 } ComandoParsed;
-
-
 
 typedef struct {
 	Authentication auth;
