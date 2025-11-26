@@ -2,7 +2,10 @@
 int running = 1;
 int tempo = TEMPO_INICIAL;
 Utilizador utilizadores[MAXCLI];
+Servico_Marcado marcados[MAX_SERVICES];
+int nServicos = 0;
 int nClientes = 0;
+int idServico = 0;
 
 void * gestor_tempo(void * arg){
     while(running){
@@ -90,6 +93,23 @@ void eliminaUtilizador(char * user,int indice){
     printf("[CONTROLADOR] Utilizador removido: %s\n", user);
 }
 
+int encontraServicoId(int id){
+    for(int i = 0; i < nServicos - 1; i++){
+        if(marcados[i].id == id) return i;
+    }
+    return -1;
+}
+
+
+void eliminaServico(int indice){
+    if(indice != -1){
+        for(int i = indice; i < nServicos - 1; i++){
+            printf("[CONTROLADOR] Servico removido: %d\n", marcados[i].id);
+            marcados[i] = marcados[i+1];
+        }
+        nServicos--;
+    }
+}
 
 int main(int argc, char * argv[]){
     int TotalServicos = 0;
@@ -200,11 +220,23 @@ int main(int argc, char * argv[]){
             resp.chave = utilizadores[indiceCliente].chave;
             switch (pedido.tipo) {
                 case MSG_AGENDAR:
-                    resp.tipo = MSG_ACEITA;
+                    
                     printf("\n----> Funcao Agendar\n");
-                    // TODO: implementar agendar
-                    char agendamento[MAX_MSG];
-                    sprintf(resp.msg, "[Controlador] Pedido de agendamento recebido: %dh local:%s distancia: %d", pedido.hora, pedido.local, pedido.distancia);
+                    // Falta veiculo e disticao de servico marcado para seguir ou previsto
+                    if(nServicos<MAX_SERVICES){
+                        resp.tipo = MSG_ACEITA;
+                        strcpy(marcados[nServicos].username,pedido.username);
+                        strcpy(marcados[nServicos].local,pedido.local);
+                        marcados[nServicos].hora = pedido.hora;
+                        marcados[nServicos].distancia = pedido.distancia;
+                        marcados[nServicos].id = ++idServico;
+                        sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",marcados[nServicos].username, marcados[nServicos].id, marcados[nServicos].hora, marcados[nServicos].local, marcados[nServicos].distancia);
+                        nServicos++;
+                    }else{
+                        sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s rejeitado!",pedido.username);
+                        resp.tipo = MSG_RECUSA;
+                    }
+                    printf("%s\n",resp.msg);
                     break;
 
                 case MSG_CONSULTAR:
@@ -212,13 +244,23 @@ int main(int argc, char * argv[]){
                     printf("\n----> Funcao Consultar\n");
                     // TODO: implementar consultar
                     strcpy(resp.msg, "[Controlador] Pedido de consulta recebido.");
+                    
                     break;
 
                 case MSG_CANCELAR:
                     resp.tipo = MSG_CANCELAR;
                     printf("\n----> Funcao Cancelar\n");
                     // TODO: implementar cancelar
-                    strcpy(resp.msg, "[Controlador] Pedido de cancelamento recebido.");
+                    int indice = encontraServicoId(pedido.servico_id);
+                    if(indice != -1){
+                        eliminaServico(indice);
+                        resp.tipo = MSG_ACEITA;
+                        sprintf(resp.msg, "[Controlador] Servico com id: %d cancelado",pedido.servico_id);
+                    }else{
+                        resp.tipo = MSG_RECUSA;
+                        sprintf(resp.msg, "[Controlador] Nao foi possivel efetuar o cancelamento do servico com id: %d",pedido.servico_id);
+                    }
+                    printf("%s\n",resp.msg);
                     break;
                 case MSG_TERMINAR:
                     resp.tipo = MSG_TERMINAR;

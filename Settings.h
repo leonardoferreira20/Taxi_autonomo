@@ -18,7 +18,7 @@
 #define MAXCMD 256
 #define MAXCLI 30
 #define MAX_VEHICLES 10
-#define MAX_SERVICES 200
+#define MAX_SERVICES 3
 #define TEMPODEASSINCRONAR 100 * 1000
 
 #define MAX_USERNAME 50
@@ -104,6 +104,20 @@ typedef struct {
 	int em_viagem;              // 1 se está em viagem, 0 caso contrário
 	int servico_ativo;          // ID do serviço em execução (-1 se nenhum)
 } Utilizador;
+
+
+typedef struct {
+	char username[MAX_USERNAME];
+	int id;
+	int hora;
+	int distancia;
+	char local[MAX_LOCAL];
+} Servico_Marcado;
+
+typedef struct {
+	char username[MAX_USERNAME];
+	int nServicos;
+} viagem;
 
 // COMANDOS - CLIENTE
 typedef struct {

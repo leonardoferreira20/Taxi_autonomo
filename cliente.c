@@ -188,8 +188,10 @@ int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedid
     }
     if(nbytes > 0){
         printf("%s\n",resposta.msg);
+        if(resposta.tipo == MSG_RECUSA){
+            printf("[CLIENTE]Pedido Recusado\n");
+        }
     }
-
     return 0;
 }
 
