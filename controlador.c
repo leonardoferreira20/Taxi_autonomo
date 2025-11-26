@@ -63,17 +63,6 @@ int verficaClienteRegistado (char *user, int pid, int chave){
     return -1;
 }
 
-int verficaClienteRegistado (char *user, int pid, int chave){
-    for(int i = 0; i < nClientes; i++){
-        if(strcmp(utilizadores[i].username, user)==0){
-            if(utilizadores[i].chave == chave){
-                return i;
-            }
-        }
-    }
-    return -1;
-}
-
 
 void adicionaUtilizador (char *user,  char * fifo_name, int pid){
     strcpy(utilizadores[nClientes].username, user);
@@ -179,9 +168,10 @@ int main(int argc, char * argv[]){
 
     if (pedido.tipo == MSG_LOGIN) {
 
-        // --- LÓGICA DE LOGIN (sem write aqui) ---
+        // --- LÓGICA DE LOGIN ---
+
         resp.tipo = MSG_RECUSA; // por omissão
-        if (nClientes < MAXCLI && usernameLogado(pedido.username, pedido.pid, pedido.chave) == 0) {
+        if (nClientes < MAXCLI && usernameLogado(pedido.username) == 0) {
             printf("[CONTROLADOR] Cliente aceite! Username: %s\n", pedido.username);
             adicionaUtilizador(pedido.username, pedido.fifo_name, pedido.pid);
             resp.chave=utilizadores[nClientes-1].chave;
