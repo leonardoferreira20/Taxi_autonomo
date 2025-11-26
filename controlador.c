@@ -76,7 +76,7 @@ void adicionaUtilizador (char *user,  char * fifo_name, int pid){
     utilizadores[nClientes].ativo = 1;
     utilizadores[nClientes].pagou = 1;
     utilizadores[nClientes].em_viagem = 0;
-    utilizadores[nClientes].servico_ativo = -1;
+    utilizadores[nClientes].servicos_ativos = 0;
 
     nClientes++;
 }
@@ -93,19 +93,19 @@ void eliminaUtilizador(char * user,int indice){
     printf("[CONTROLADOR] Utilizador removido: %s\n", user);
 }
 
-int encontraServicoId(int id){
-    for(int i = 0; i < nServicos - 1; i++){
-        if(marcados[i].id == id) return i;
+int encontraServicoId(int id, int indiceCliente){
+    for(int i = 0; i < nServicos; i++){
+        if(utilizadores[indiceCliente].servicos[i].id == id) return i;
     }
     return -1;
 }
 
 
-void eliminaServico(int indice){
-    if(indice != -1){
-        for(int i = indice; i < nServicos - 1; i++){
-            printf("[CONTROLADOR] Servico removido: %d\n", marcados[i].id);
-            marcados[i] = marcados[i+1];
+void eliminaServico(int indice_Serv, int indiceCliente){
+    if(indice_Serv != -1){
+        for(int i = indice_Serv; i < nServicos - 1; i++){
+            printf("[CONTROLADOR] Servico removido: %d\n", utilizadores[indiceCliente].servicos[i].id);
+            utilizadores[indiceCliente].servicos[i] = utilizadores[indiceCliente].servicos[i+1];
         }
         nServicos--;
     }
@@ -225,12 +225,12 @@ int main(int argc, char * argv[]){
                     // Falta veiculo e disticao de servico marcado para seguir ou previsto
                     if(nServicos<MAX_SERVICES){
                         resp.tipo = MSG_ACEITA;
-                        strcpy(marcados[nServicos].username,pedido.username);
-                        strcpy(marcados[nServicos].local,pedido.local);
-                        marcados[nServicos].hora = pedido.hora;
-                        marcados[nServicos].distancia = pedido.distancia;
-                        marcados[nServicos].id = ++idServico;
-                        sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",marcados[nServicos].username, marcados[nServicos].id, marcados[nServicos].hora, marcados[nServicos].local, marcados[nServicos].distancia);
+                        strcpy(utilizadores[indiceCliente].servicos[nServicos].username,pedido.username);
+                        strcpy(utilizadores[indiceCliente].servicos[nServicos].local,pedido.local);
+                        utilizadores[indiceCliente].servicos[nServicos].hora = pedido.hora;
+                        utilizadores[indiceCliente].servicos[nServicos].distancia = pedido.distancia;
+                        utilizadores[indiceCliente].servicos[nServicos].id = ++idServico;
+                        sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",utilizadores[indiceCliente].servicos[nServicos].username, utilizadores[indiceCliente].servicos[nServicos].id, utilizadores[indiceCliente].servicos[nServicos].hora, utilizadores[indiceCliente].servicos[nServicos].local, utilizadores[indiceCliente].servicos[nServicos].distancia);
                         nServicos++;
                     }else{
                         sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s rejeitado!",pedido.username);
@@ -251,9 +251,9 @@ int main(int argc, char * argv[]){
                     resp.tipo = MSG_CANCELAR;
                     printf("\n----> Funcao Cancelar\n");
                     // TODO: implementar cancelar
-                    int indice = encontraServicoId(pedido.servico_id);
+                    int indice = encontraServicoId(pedido.servico_id, indiceCliente);
                     if(indice != -1){
-                        eliminaServico(indice);
+                        eliminaServico(indice,indiceCliente);
                         resp.tipo = MSG_ACEITA;
                         sprintf(resp.msg, "[Controlador] Servico com id: %d cancelado",pedido.servico_id);
                     }else{
@@ -266,7 +266,7 @@ int main(int argc, char * argv[]){
                     resp.tipo = MSG_TERMINAR;
                     if (utilizadores[indiceCliente].pagou == 1 &&
                         utilizadores[indiceCliente].em_viagem == 0 &&
-                        utilizadores[indiceCliente].servico_ativo == -1) {
+                        utilizadores[indiceCliente].servicos_ativos == 0) {
                         
                         
                         eliminaUtilizador(pedido.username,indiceCliente);
@@ -337,29 +337,3 @@ int main(int argc, char * argv[]){
 
 
 
-
-
-/*
-void print1(){
-        printf("\n------------------------------------INFO------------------------------------\n\n");
-    printf("[SISTEMA] Servico esteve em execucao durante: %d segundos!\n",tempo);
-    printf("[SISTEMA] Servico recebeu %d tentativas de ligacao!\n",totalTentativasLigacao);
-    printf("[SISTEMA] Dessas tentativas de ligacao:\n");
-    printf("             >Servico rejeitou %d utilizadores!\n",totalUtilizadoresRejeitados);
-    printf("             >Servico autenticou %d utilizadores!\n",totalUtilizadoresLigados);
-    printf("[SISTEMA] Servico efetuou %d viagens!\n",TotalServicos);
-    printf("\n----------------------------------ENCERRAR----------------------------------\n");
-    printf("[SISTEMA] Encerrado.");
-    printf("\n----------------------------------------------------------------------------\n");
-    printf("\n\n");
-
-    printf("             _________                          _X_\n");
-    printf("            //  ||\\ \\                        // \\\n");
-    printf("  \\  _____//___||_\\ \\___       ~ ~ ~ ~ ~~~~  | |\n");
-    printf("  -->=)  _           _    \\       ~ ~ ~ ~ ~~~~ | |\n");
-    printf("  //  |_/ \\________/ \\___|       ~ ~ ~ ~ ~~~~ | |\n");
-    printf("________\\_/________\\_/________________________| |\n");
-    printf("________________________________________________| |\n");
-}
-
-*/

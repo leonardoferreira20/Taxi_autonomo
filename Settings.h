@@ -93,18 +93,6 @@ typedef struct {
 } Mensagem;
 
 // UTILIZADOR - CONTROLADOR
-typedef struct {
-	char username[MAX_USERNAME];
-	char fifo_name[MAX_MSG];
-	int chave;
-	int pid;
-	int distancia;
-	int ativo;
-	int pagou;
-	int em_viagem;              // 1 se está em viagem, 0 caso contrário
-	int servico_ativo;          // ID do serviço em execução (-1 se nenhum)
-} Utilizador;
-
 
 typedef struct {
 	char username[MAX_USERNAME];
@@ -115,9 +103,22 @@ typedef struct {
 } Servico_Marcado;
 
 typedef struct {
+	Servico_Marcado servicos[MAX_SERVICES];
+	char username[MAX_USERNAME];
+	char fifo_name[MAX_MSG];
+	int chave;
+	int pid;
+	int distancia;
+	int ativo;
+	int pagou;
+	int em_viagem;              // 1 se está em viagem, 0 caso contrário
+	int servicos_ativos;          // ID do serviço em execução (-1 se nenhum)
+} Utilizador;
+
+typedef struct {
 	char username[MAX_USERNAME];
 	int nServicos;
-} viagem;
+} Viagem;
 
 // COMANDOS - CLIENTE
 typedef struct {
