@@ -136,7 +136,6 @@ ComandoParsed parsear_comando(const char *linha) {
     return cmd;
 }
 
-
 // HANDLER PARA DETETAR MORTE DO CONTROLADOR (SIGPIPE)
 void handler_pipe(int sig) {
     (void)sig;
@@ -160,7 +159,6 @@ void mostrar_ajuda() {
 
 // COMANDO AGENDAR
 int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedido, int hora, const char *local, int distancia) {
-    
     pedido->tipo = MSG_AGENDAR;
     pedido->hora = hora;
     strncpy(pedido->local, local, MAX_LOCAL - 1);
@@ -177,21 +175,24 @@ int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedid
     Mensagem resposta;
     memset(&resposta, 0, sizeof(resposta));
     usleep(TEMPODEASSINCRONAR);
+
     int nbytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nbytes == -1) {
         if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
+            perror("[CLIENTE] Erro na leitura da resposta!\n");
         }else{ //Este é o erro do sinal!
             perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
         }
-        return 0;
+        return -1;
     }
+
     if(nbytes > 0){
         printf("%s\n",resposta.msg);
         if(resposta.tipo == MSG_RECUSA){
-            printf("[CLIENTE]Pedido Recusado\n");
+            printf("[CLIENTE] Pedido Recusado\n");
         }
     }
+
     return 0;
 }
 
@@ -212,7 +213,7 @@ int enviar_consultar(int fd, int fd_privado, const char *username, Mensagem *ped
     int nbytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nbytes == -1) {
         if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
+            perror("[CLIENTE] Erro na leitura da resposta!\n");
         }else{ //Este é o erro do sinal!
             perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
         }
@@ -247,12 +248,13 @@ int enviar_cancelar(int fd,int fd_privado, const char *username,Mensagem *pedido
     int nbytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nbytes == -1) {
         if (errno != EINTR) {
-        perror("[CLIENTE] Erro na leitura da resposta!\n");
+            perror("[CLIENTE] Erro na leitura da resposta!\n");
         }else{ //Este é o erro do sinal!
             perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
         }
         return 0;
     }
+
     if(nbytes > 0){
         printf("%s\n",resposta.msg);
     }
@@ -270,6 +272,7 @@ int enviar_terminar(int fd, int fd_privado, const char *username, Mensagem *pedi
     }
     printf("[CLIENTE] ✓ Pedido de término enviado\n");
     sleep(1);
+
     Mensagem resposta_termino;
     memset(&resposta_termino, 0, sizeof(resposta_termino));
     usleep(100 * 10000);
@@ -404,6 +407,7 @@ int main(int argc, char* argv[]){
     pedido.username[MAX_USERNAME - 1] = '\0';
     pedido.pid = getpid();
     pedido.chave = chave;
+    
     strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
     pedido.fifo_name[MAX_MSG - 1] = '\0';
     pedido.tipo = MSG_LOGIN;
