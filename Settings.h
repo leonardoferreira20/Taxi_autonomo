@@ -24,7 +24,7 @@
 #define MAX_USERNAME 50
 #define MAX_LOCAL 100
 #define MAX_DESTINO 100
-#define MAX_MSG 512
+#define MAX_MSG 512*4
 
 #define SERVERFIFO "fifo_server"
 #define CLIENTE_FIFO_PREFIX "cli_"
@@ -58,12 +58,14 @@ typedef enum {
 	MSG_AGENDAR = 2,
 	MSG_CONSULTAR = 3,
 	MSG_CANCELAR = 4,
-	MSG_RESPOSTA = 5,
-	MSG_TERMINAR = 6,
-	MSG_NOTIFICACAO = 7,
-	MSG_ACEITA = 8,
-	MSG_RECUSA = 9,
-	MSG_NAOAUTENTICADO = 10
+	MSG_ENTRAR = 5,
+	MSG_SAIR = 6,
+	MSG_RESPOSTA = 7,
+	MSG_TERMINAR = 8,
+	MSG_NOTIFICACAO = 9,
+	MSG_ACEITA = 10,
+	MSG_RECUSA = 11,
+	MSG_NAOAUTENTICADO = 12
 } TipoMensagem;
 
 // AUTENTICAÇÃO
@@ -103,7 +105,6 @@ typedef struct {
 } Servico_Marcado;
 
 typedef struct {
-	Servico_Marcado servicos[MAX_SERVICES];
 	char username[MAX_USERNAME];
 	char fifo_name[MAX_MSG];
 	int chave;
@@ -112,7 +113,8 @@ typedef struct {
 	int ativo;
 	int pagou;
 	int em_viagem;              // 1 se está em viagem, 0 caso contrário
-	int servicos_ativos;          // ID do serviço em execução (-1 se nenhum)
+	int servicos_ativos;		// Indice do arry de servicos
+	Servico_Marcado servicos[MAX_SERVICES];      
 } Utilizador;
 
 typedef struct {

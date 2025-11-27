@@ -189,7 +189,7 @@ int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedid
     if(nbytes > 0){
         printf("%s\n",resposta.msg);
         if(resposta.tipo == MSG_RECUSA){
-            printf("[CLIENTE] Pedido Recusado\n");
+            printf("[CLIENTE] Pedido de agendamento recusado\n");
         }
     }
 
@@ -220,7 +220,14 @@ int enviar_consultar(int fd, int fd_privado, const char *username, Mensagem *ped
         return 0;
     }
     if(nbytes > 0){
-        printf("%s\n",resposta.msg);
+        if(resposta.tipo == MSG_ACEITA){
+            printf("\n------------------------SERVICOS---------------------------------\n");
+            printf("%s\n",resposta.msg);
+            printf("\n-----------------------------------------------------------------\n");
+        }else{
+            printf("%s\n",resposta.msg);
+            printf("[CLIENTE] Pedido de consulta recusado!\n");
+        }
     }
     return 0;
 }
@@ -291,9 +298,7 @@ int enviar_terminar(int fd, int fd_privado, const char *username, Mensagem *pedi
             return 1;
         }
         printf("%d",resposta_termino.tipo);
-        printf("AQUI\n");
         printf("%s\n",resposta_termino.msg);
-        printf("AQUI\n");
     }
     return 0;
 }
@@ -475,7 +480,7 @@ int main(int argc, char* argv[]){
         pedido.fifo_name[MAX_MSG - 1] = '\0';
         pedido.chave = chave;
 
-        printf("%s > ", username);
+        printf("\n%s > ", username);
         fflush(stdout);
         
         if (fgets(linha, sizeof(linha), stdin) == NULL) {

@@ -90,27 +90,42 @@ void eliminaUtilizador(char * user,int indice){
     for(int i = indice; i < nClientes - 1; i++){
         utilizadores[i] = utilizadores[i+1];
     }
-
     nClientes--;
+
+    //FALTA TERMINAR SERVICOS ATIVOS
+
     printf("[CONTROLADOR] Utilizador removido: %s\n", user);
 }
 
 int encontraServicoId(int id, int indiceCliente){
-    for(int i = 0; i < nServicos; i++){
+    for(int i = 0; i < utilizadores[indiceCliente].servicos_ativos; i++){
         if(utilizadores[indiceCliente].servicos[i].id == id) return i;
     }
     return -1;
 }
 
 void eliminaServico(int indice_Serv, int indiceCliente){
-    if(indice_Serv != -1){
-        for(int i = indice_Serv; i < nServicos - 1; i++){
-            printf("[CONTROLADOR] Servico removido: %d\n", utilizadores[indiceCliente].servicos[i].id);
-            utilizadores[indiceCliente].servicos[i] = utilizadores[indiceCliente].servicos[i+1];
-        }
-        nServicos--;
+    if (indice_Serv < 0 ||
+        indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
+        return;
     }
+
+    int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
+
+    // Shift à esquerda a partir do removido -- VER
+    for (int i = indice_Serv;
+         i < utilizadores[indiceCliente].servicos_ativos - 1;
+         i++) {
+        utilizadores[indiceCliente].servicos[i] =
+            utilizadores[indiceCliente].servicos[i+1];
+    }
+
+    utilizadores[indiceCliente].servicos_ativos--;
+    nServicos--;
+
+    printf("[CONTROLADOR] Servico removido: %d\n", idRemovido);
 }
+
 
 int main(int argc, char * argv[]){
     int TotalServicos = 0;
@@ -218,14 +233,21 @@ int main(int argc, char * argv[]){
                     case MSG_AGENDAR:
                         printf("\n----> Funcao Agendar\n");
                         // Falta veiculo e disticao de servico marcado para seguir ou previsto
-                        if(nServicos<MAX_SERVICES){
+                        if(nServicos<MAX_SERVICES && utilizadores[indiceCliente].servicos_ativos <MAX_SERVICES){
                             resp.tipo = MSG_ACEITA;
-                            strcpy(utilizadores[indiceCliente].servicos[nServicos].username,pedido.username);
-                            strcpy(utilizadores[indiceCliente].servicos[nServicos].local,pedido.local);
-                            utilizadores[indiceCliente].servicos[nServicos].hora = pedido.hora;
-                            utilizadores[indiceCliente].servicos[nServicos].distancia = pedido.distancia;
-                            utilizadores[indiceCliente].servicos[nServicos].id = ++idServico;
-                            sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",utilizadores[indiceCliente].servicos[nServicos].username, utilizadores[indiceCliente].servicos[nServicos].id, utilizadores[indiceCliente].servicos[nServicos].hora, utilizadores[indiceCliente].servicos[nServicos].local, utilizadores[indiceCliente].servicos[nServicos].distancia);
+                            int iServico = utilizadores[indiceCliente].servicos_ativos;
+                            strcpy(utilizadores[indiceCliente].servicos[iServico].username,pedido.username);
+                            strcpy(utilizadores[indiceCliente].servicos[iServico].local,pedido.local);
+                            utilizadores[indiceCliente].servicos[iServico].hora = pedido.hora;
+                            utilizadores[indiceCliente].servicos[iServico].distancia = pedido.distancia;
+                            utilizadores[indiceCliente].servicos[iServico].id = ++idServico;
+                            utilizadores[indiceCliente].servicos_ativos ++;
+                            sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",
+                                utilizadores[indiceCliente].servicos[iServico].username,
+                                utilizadores[indiceCliente].servicos[iServico].id, 
+                                utilizadores[indiceCliente].servicos[iServico].hora, 
+                                utilizadores[indiceCliente].servicos[iServico].local, 
+                                utilizadores[indiceCliente].servicos[iServico].distancia);
                             nServicos++;
                         }else{
                             sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s rejeitado!",pedido.username);
@@ -235,40 +257,51 @@ int main(int argc, char * argv[]){
                         break;
                     case MSG_CONSULTAR:
                         resp.tipo = MSG_CONSULTAR;
-                        printf("\n----> Funcao Consultar\n");
-                        // TODO: implementar consultar
-                        strcpy(resp.msg, "[Controlador] Pedido de consulta recebido.");
+
                         if(utilizadores[indiceCliente].servicos_ativos > 0){
-                            int fd_cliente = open(pedido.fifo_name, O_WRONLY);
-                            if (fd_cliente == -1) {
-                                perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita");
-                                // não conseguimos responder, mas não rebentamos o servidor
-                            } else {
-                                if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
-                                    perror("[CONTROLADOR] Erro ao enviar resposta ao cliente");
-                                }
-                                close(fd_cliente);
+                            resp.tipo = MSG_ACEITA;
+                            for (int i = 0; i < utilizadores[indiceCliente].servicos_ativos; ++i){
+                                sprintf (resp.msg,"%s\n\tServico>> id: %d hora: %d local: %s distancia: %d",
+                                    resp.msg,utilizadores[indiceCliente].servicos[i].id,
+                                    utilizadores[indiceCliente].servicos[i].hora,
+                                    utilizadores[indiceCliente].servicos[i].local,
+                                    utilizadores[indiceCliente].servicos[i].distancia);
                             }
-                            continue;
+                        printf("%s\n",resp.msg);
                         }else{
-                            strcpy(resp.msg, "[Controlador] Utilizador nao tem nenhum Servico Ativo!");
+                            resp.tipo = MSG_RECUSA;
+                            sprintf(resp.msg, "[Controlador] Utilizador %s nao tem nenhum Servico ativo neste momento!",pedido.username);
                             printf("%s\n",resp.msg);
                         }
                         break;
                     case MSG_CANCELAR:
-                        resp.tipo = MSG_CANCELAR;
-                        printf("\n----> Funcao Cancelar\n");
-                        // TODO: implementar cancelar
                         int indice = encontraServicoId(pedido.servico_id, indiceCliente);
-                        if(indice != -1){
-                            eliminaServico(indice,indiceCliente);
+
+                        if (pedido.servico_id == 0) {
+                            while (utilizadores[indiceCliente].servicos_ativos > 0) {
+                                eliminaServico(0, indiceCliente);
+                            }
+                            strcpy(resp.msg, "[Controlador] Todos os servicos do utilizador apagados!");
                             resp.tipo = MSG_ACEITA;
-                            sprintf(resp.msg, "[Controlador] Servico com id: %d cancelado",pedido.servico_id);
-                        }else{
-                            resp.tipo = MSG_RECUSA;
-                            sprintf(resp.msg, "[Controlador] Nao foi possivel efetuar o cancelamento do servico com id: %d",pedido.servico_id);
+                        } else {
+                            if (indice != -1) {
+                                eliminaServico(indice, indiceCliente);
+                                resp.tipo = MSG_ACEITA;
+                                sprintf(resp.msg,
+                                        "[Controlador] Servico com id: %d cancelado",
+                                        pedido.servico_id);
+                            } else {
+                                resp.tipo = MSG_RECUSA;
+                                sprintf(resp.msg,
+                                        "[Controlador] Nao foi possivel efetuar o cancelamento do servico com id: %d",
+                                        pedido.servico_id);
+                            }
                         }
-                        printf("%s\n",resp.msg);
+                        printf("%s\n", resp.msg);
+                        break;
+                    case MSG_ENTRAR:
+                        break;
+                    case MSG_SAIR:
                         break;
                     case MSG_TERMINAR:
                         resp.tipo = MSG_TERMINAR;
@@ -294,7 +327,8 @@ int main(int argc, char * argv[]){
             }
         }
         
-        // --- ÚNICO WRITE: enviar resposta ao FIFO do cliente ---
+        // --- "ÚNICO WRITE" (este write serve para mensagem): enviar resposta ao FIFO do cliente ---
+        //           pode existir mais writes mas sao no switch com continue (ex consultar)
         int fd_cliente = open(pedido.fifo_name, O_WRONLY);
         if (fd_cliente == -1) {
             perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita");
