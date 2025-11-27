@@ -6,6 +6,62 @@ Servico_Marcado marcados[MAX_SERVICES];
 int nServicos = 0;
 int nClientes = 0;
 int idServico = 0;
+int kms = 0;
+int fd_servidor = 0;
+
+void * gestor_comandos_controlador(void * arg){
+
+    while(running){
+        char comando [MAXCMD];
+
+        printf("Admin >");
+        fflush(stdout);
+        if (fgets(comando, sizeof(comando), stdin) == NULL) {
+            break;
+        }
+        comando[strcspn(comando, "\n")] = '\0';
+         if (strcmp(comando, "hora") == 0) {
+            printf("[CONTROLADOR] Tempo simulado: %d\n", tempo);
+        }
+        else if (strcmp(comando, "km") == 0) {
+            printf("[CONTROLADOR] Total km percorridos: %d\n", kms);
+        }
+        else if (strcmp(comando, "utiliz") == 0) {
+            printf("listar_utilizadores()");
+        }
+        else if (strcmp(comando, "listar") == 0) {
+             printf("listar_servicos()");
+        }
+        else if (strncmp(comando, "cancelar", 8) == 0) {
+            int id;
+            if (sscanf(comando, "cancelar %d", &id) != 1) {
+                printf("[CONTROLADOR] Uso: cancelar <id>\n", id);
+            } else {
+                /*
+                if (!eliminaServicoLista(id)) {
+                    printf("[CONTROLADOR] Nao foi possivel cancelar o servico com id %d\n", id);
+                }else printf("[CONTROLADOR] Servico com id %d cancelado.\n", id);
+                */
+                printf(" falta logica de cancelar\n");
+            }
+        }
+        else if (strcmp(comando, "frota") == 0) {
+            printf("[CONTROLADOR] (frota ainda nao implementada)\n");
+        }
+        else if (strcmp(comando, "terminar") == 0) {
+            printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\n");
+            running = 0;
+            break;
+        }
+        else if (comando[0] != '\0') {
+            printf("[CONTROLADOR] Comando invalido: %s\n", comando);
+            printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, cancelar <id>, terminar\n");
+        }
+    }
+    close(fd_servidor);
+    fd_servidor = -1;
+    pthread_exit(NULL);
+}
 
 void * gestor_tempo(void * arg){
     while(running){
@@ -104,6 +160,10 @@ int encontraServicoId(int id, int indiceCliente){
     return -1;
 }
 
+void eliminaServicoLista(int id){
+
+}
+
 void eliminaServico(int indice_Serv, int indiceCliente){
     if (indice_Serv < 0 ||
         indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
@@ -166,10 +226,15 @@ int main(int argc, char * argv[]){
     // LANÇAR THREAD DE GESTÃO DO TEMPO
     pthread_t thread_tempo;
     if(pthread_create(&thread_tempo, NULL, gestor_tempo, NULL) != 0){
-        perror("[CONTROLADOR] Erro a criar a thread");
+        perror("[CONTROLADOR] Erro a criar a thread de tempo!");
     }
 
-    int fd_servidor = open(SERVERFIFO, O_RDWR);
+    pthread_t thread_linha_comando;
+    if(pthread_create(&thread_linha_comando, NULL, gestor_comandos_controlador, NULL) != 0){
+        perror("[CONTROLADOR] Erro a criar a thread de comandos do controlador!");
+    }
+
+    fd_servidor = open(SERVERFIFO, O_RDWR);
     if (fd_servidor == -1) {
         perror("[CONTROLADOR] Erro na abertura do named pipe para leitura");
         unlink(SERVERFIFO);
@@ -344,7 +409,10 @@ int main(int argc, char * argv[]){
 
     printf("[CONTROLADOR] A encerrar...\n");
     
+
     pthread_join(thread_tempo, NULL);
+    pthread_cancel(thread_linha_comando); //Cancela a thread para sair do fgets se é bonito ou nao nao sei mas funciona!!!
+    pthread_join(thread_linha_comando, NULL);
     
     /* Encerrar os clientes no array de clientes - enviar mensagem a cada um deles
     for(int i = 0; i < nClientes;i++){
