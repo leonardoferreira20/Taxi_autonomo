@@ -7,7 +7,7 @@ int nServicos = 0;
 int nClientes = 0;
 int idServico = 0;
 int kms = 0;
-int fd_servidor = 0;
+int fd_servidor = -1;
 
 void * gestor_comandos_controlador(void * arg){
 
@@ -49,17 +49,26 @@ void * gestor_comandos_controlador(void * arg){
             printf("[CONTROLADOR] (frota ainda nao implementada)\n");
         }
         else if (strcmp(comando, "terminar") == 0) {
-            printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\n");
+            printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
+            Mensagem acorda;
+            int fd_acorda = open(SERVERFIFO, O_WRONLY);
+            if (fd_acorda == -1) {
+                perror("[CONTROLADOR] Erro a abrir SERVERFIFO para acordar o main");
+            }else {
+                strcpy(acorda.msg,"Acorda burro!\n");
+                if (write(fd_acorda, &acorda, sizeof(acorda)) == -1) {
+                    perror("[CONTROLADOR] Erro a escrever mensagem fake");
+                }
+                close(fd_acorda);
+            }
             running = 0;
-            break;
         }
         else if (comando[0] != '\0') {
             printf("[CONTROLADOR] Comando invalido: %s\n", comando);
             printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, cancelar <id>, terminar\n");
         }
     }
-    close(fd_servidor);
-    fd_servidor = -1;
+    raise(SIGINT); // força um sinal
     pthread_exit(NULL);
 }
 
@@ -196,7 +205,7 @@ int main(int argc, char * argv[]){
     struct sigaction sa;
     sa.sa_handler = handler_sigint;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO;
+    sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
 
     // VERIFICA
@@ -229,11 +238,6 @@ int main(int argc, char * argv[]){
         perror("[CONTROLADOR] Erro a criar a thread de tempo!");
     }
 
-    pthread_t thread_linha_comando;
-    if(pthread_create(&thread_linha_comando, NULL, gestor_comandos_controlador, NULL) != 0){
-        perror("[CONTROLADOR] Erro a criar a thread de comandos do controlador!");
-    }
-
     fd_servidor = open(SERVERFIFO, O_RDWR);
     if (fd_servidor == -1) {
         perror("[CONTROLADOR] Erro na abertura do named pipe para leitura");
@@ -244,6 +248,11 @@ int main(int argc, char * argv[]){
     printf("[CONTROLADOR] Sistema iniciado!\n");
     printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, terminar\n\n");
 
+    pthread_t thread_linha_comando;
+    if(pthread_create(&thread_linha_comando, NULL, gestor_comandos_controlador, NULL) != 0){
+        perror("[CONTROLADOR] Erro a criar a thread de comandos do controlador!");
+    }
+
     while (running) {
         Mensagem pedido;
         Mensagem resp;
@@ -251,11 +260,11 @@ int main(int argc, char * argv[]){
         memset(&resp, 0, sizeof(resp));
 
         int nbytes = read(fd_servidor, &pedido, sizeof(pedido));
-        if (nbytes == -1) {
-            if (errno != EINTR) {
+        if (nbytes <= 0) {
+            if (nbytes == -1 && errno != EINTR) {
                 perror("[CONTROLADOR] Erro na leitura do pedido!");
-            } else { // interrupção por sinal (CTRL+C)
-                perror("[CONTROLADOR] Encerrar a leitura de mensagens!");
+            } else {
+                printf("[CONTROLADOR] Leitura terminada (EOF ou interrompida).\n");
             }
             break;
         }
@@ -409,7 +418,7 @@ int main(int argc, char * argv[]){
 
     printf("[CONTROLADOR] A encerrar...\n");
     
-
+    pthread_cancel(thread_tempo);
     pthread_join(thread_tempo, NULL);
     pthread_cancel(thread_linha_comando); //Cancela a thread para sair do fgets se é bonito ou nao nao sei mas funciona!!!
     pthread_join(thread_linha_comando, NULL);
