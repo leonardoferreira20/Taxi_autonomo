@@ -34,6 +34,8 @@ run-server: $(CONTROLADOR)
 	@echo "Starting server with NVEICULOS=4..."
 	NVEICULOS=4 ./controlador
 
+
+
 # Executar cliente
 run-client: $(CLIENTE)
 ifndef nome
@@ -41,6 +43,11 @@ ifndef nome
 endif
 	@echo "Running client '$(nome)'..."
 	./$(CLIENTE) $(nome)
+
+rebuild-run:
+	$(MAKE) clean
+	$(MAKE)
+	./$(CONTROLADOR)
 
 clean:
 	rm -f *.o $(CONTROLADOR) $(CLIENTE) $(VEICULO)

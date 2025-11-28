@@ -49,7 +49,7 @@ void * gestor_comandos_controlador(void * arg){
             printf("[CONTROLADOR] (frota ainda nao implementada)\n");
         }
         else if (strcmp(comando, "terminar") == 0) {
-            printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
+            printf("AA[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
             Mensagem acorda;
             int fd_acorda = open(SERVERFIFO, O_WRONLY);
             if (fd_acorda == -1) {
@@ -68,13 +68,39 @@ void * gestor_comandos_controlador(void * arg){
             printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, cancelar <id>, terminar\n");
         }
     }
-    raise(SIGINT); // força um sinal
+    //raise(SIGINT); // força um sinal
     pthread_exit(NULL);
 }
 
 void * gestor_tempo(void * arg){
     while(running){
         ++tempo;
+        if(tempo==1000000)
+            {int fd_taxi[2];
+            //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
+            //na posicao 0 fica a extremidade de leitura que nao vai ser usada
+            //na posicao 1 fica a extremidade de escrita que vai ser usada
+            //para o veiculo mandar mensagens ao controlador
+            if(pipe(fd_taxi)==-1){
+                perror("Erro na abertura de pipe anonimo");
+            }
+            pid_t pid = fork();
+            if(pid < 0){
+                perror("Failed fork!");
+            }
+            //Este é o codigo que o processo filho
+            //que acabou de ser criado vai executar
+            if(pid == 0){
+                close(fd_taxi[0]); //Fechar o lado de leitura
+                dup2(fd_taxi[1],STDOUT_FILENO); //Estamos a substituir o STDOUT pela extremidade do pipe-anonimo
+                close(fd_taxi[1]);
+                //execl("./veiculo","veiculo",/*local*/,/*distancia*/,NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
+            }else{//isto sera paa o controlador receber as mensagens dos veiculos
+                close(fd_taxi[1]);
+                //O pai vai ler do veiculo na posicao 0 do fd_taxi
+                //serao feitos reads na posicao 0 do fd taxi
+            }}
+        
         sleep(1);
     }
     return NULL;
