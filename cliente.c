@@ -464,8 +464,6 @@ int main(int argc, char* argv[]){
     printf("\n");
 
     chave = resposta.chave;
-    printf("chave : %d", chave);
-    printf("chave : %d", resposta.chave);
     mostrar_ajuda();
 
     char linha[MAXCMD];

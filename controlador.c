@@ -9,8 +9,217 @@ int idServico = 0;
 int kms = 0;
 int fd_servidor = -1;
 
-void * gestor_comandos_controlador(void * arg){
+void handler_sigint(int sig) {
+    printf("\n[CONTROLADOR] Sinal recebido. A terminar...\n");
+    running = 0;
+}
 
+void imprimirTipoDePedido(TipoMensagem tipo){
+    switch(tipo){
+        case MSG_AGENDAR:
+            printf("[CONTROLADOR] Pedido do tipo Agendar\n");
+        break;
+        case MSG_CONSULTAR:
+            printf("[CONTROLADOR] Pedido do tipo Consultar\n");
+        break;
+        case MSG_CANCELAR:
+            printf("[CONTROLADOR] Pedido do tipo Cancelar\n");
+        break;
+        case MSG_TERMINAR:
+            printf("[CONTROLADOR] Pedido do tipo Terminar\n");
+        break;
+        default: 
+            printf("[CONTROLADOR] Comando Inválido\n");
+        break;
+    }
+}
+
+int usernameLogado(char *user) {
+    for (int i = 0; i < nClientes; i++) {
+        if (strcmp(utilizadores[i].username, user) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int verficaClienteRegistado (char *user, int pid, int chave){
+    for(int i = 0; i < nClientes; i++){
+        if(strcmp(utilizadores[i].username, user)==0){
+            if(utilizadores[i].chave == chave){
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+void adicionaUtilizador (char *user,  char * fifo_name, int pid){
+    strcpy(utilizadores[nClientes].username, user);
+    strcpy(utilizadores[nClientes].fifo_name, fifo_name);
+    utilizadores[nClientes].pid = pid;
+    utilizadores[nClientes].chave = tempo;
+    utilizadores[nClientes].distancia = 0;
+    utilizadores[nClientes].ativo = 1;
+    utilizadores[nClientes].pagou = 1;
+    utilizadores[nClientes].em_viagem = 0;
+    utilizadores[nClientes].servicos_ativos = 0;
+
+    nClientes++;
+}
+
+void eliminaUtilizador(char * user,int indice){
+    if (indice == -1) {
+        printf("[CONTROLADOR] Falha ao tentar remover utilizador não registado: %s\n", user);
+        return;
+    }
+
+    for(int i = indice; i < nClientes - 1; i++){
+        utilizadores[i] = utilizadores[i+1];
+    }
+    nClientes--;
+
+    //FALTA TERMINAR SERVICOS ATIVOS
+
+    printf("[CONTROLADOR] Utilizador removido: %s\n", user);
+}
+
+int encontraServicoId(int id, int indiceCliente){
+    for(int i = 0; i < utilizadores[indiceCliente].servicos_ativos; i++){
+        if(utilizadores[indiceCliente].servicos[i].id == id) return i;
+    }
+    return -1;
+}
+
+void listarUtilizadores() {
+    printf("\n------------------------------------------------------------\n");
+    printf("\n                    Lista de utilizadores                   \n");
+    printf("\n------------------------------------------------------------\n");
+
+    if ( nClientes == 0){
+        printf("\n Nao existe nenhum utilizador registado.\n");
+    }
+    else {
+        printf("\n    ID  | Username           | PID   | Estado       | S.A   \n");
+        printf("\n------------------------------------------------------------\n");
+
+        for ( int i = 0; i < nClientes; ++i ){
+            char *estado;
+
+            if (utilizadores[i].em_viagem) {
+                estado = "EM VIAGEM";
+            } else if (utilizadores[i].servicos_ativos > 0) {
+                estado = "À ESPERA";
+            } else {
+                estado = "LIVRE";
+            }
+
+            printf("\n    %d  | %s           | %d   | %s       | %d   \n", i + 1, utilizadores[i].username, utilizadores[i].pid, estado, utilizadores[i].servicos_ativos);
+
+        }
+    }
+    
+    printf("\n------------------------------------------------------------\n");
+    printf("\n Total: %d/%d utilizadores\n", nClientes, MAXCLI);
+    printf("\n------------------------------------------------------------\n");
+}
+
+void listarServicos() {
+    printf("\n-----------------------------------------------------------------------------\n");
+    printf("\n                             Serviços Agendados                              \n");
+    printf("\n-----------------------------------------------------------------------------\n");
+    
+    int total = 0;
+    int encontrou = 0;
+    
+    for (int i = 0; i < nClientes; i++) {
+        total += utilizadores[i].servicos_ativos;
+    }
+    
+    if (total == 0) {
+        printf("\n Nao existe nenhum serviço agendado.\n");
+    } else {
+        printf("\n    ID  | Username           | Hora   | Local       | Distancia | Estado     \n");
+        printf("\n-----------------------------------------------------------------------------\n");
+        
+        for (int i = 0; i < nClientes; i++) {
+            for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
+                // Determinar estado (por agora só AGENDADO, depois adicionar EM_EXECUCAO)
+                char *estado = "AGENDADO";
+                
+                printf("\n    %d  │ %s           │ %d   │ %s       │ %d │ %s      \n", utilizadores[i].servicos[j].id, utilizadores[i].servicos[j].username, utilizadores[i].servicos[j].hora, utilizadores[i].servicos[j].local, utilizadores[i].servicos[j].distancia, estado);
+                encontrou = 1;
+            }
+        }
+    }
+    
+    printf("-----------------------------------------------------------------------------\n");
+    printf("   Total: %d serviços agendados                                             \n", total);
+    printf("-----------------------------------------------------------------------------\n");
+}
+
+void cancelarServicoAdmin(int id){
+    if (id == 0) {
+        // CANCELAR TODOS OS SERVIÇOS
+        printf("[CONTROLADOR] A cancelar TODOS os serviços...\n");
+        
+        int total_cancelados = 0;
+        for (int i = 0; i < nClientes; i++) {
+            int servicos_cliente = utilizadores[i].servicos_ativos;
+            while (utilizadores[i].servicos_ativos > 0) {
+                eliminaServico(0, i);
+                total_cancelados++;
+            }
+        }
+        
+        printf("[CONTROLADOR] ✓ %d serviços cancelados!\n\n", total_cancelados);
+        return;
+    }
+    
+    // CANCELAR SERVIÇO ESPECÍFICO
+    for (int i = 0; i < nClientes; i++) {
+        int indice = encontraServicoId(id, i);
+        if (indice != -1) {
+            printf("[CONTROLADOR] Serviço #%d encontrado (cliente: %s)\n", 
+                   id, utilizadores[i].username);
+            
+            // TODO: Se estiver EM_EXECUCAO, enviar SIGUSR1 ao veículo
+            // if (servico em execução) {
+            //     kill(pid_veiculo, SIGUSR1);
+            // }
+            
+            eliminaServico(indice, i);
+            printf("[CONTROLADOR] ✓ Serviço #%d cancelado!\n\n", id);
+            return;
+        }
+    }
+    
+    printf("[CONTROLADOR] ✗ Serviço #%d não encontrado!\n\n", id);
+}
+
+void eliminaServico(int indice_Serv, int indiceCliente){
+    if (indice_Serv < 0 ||
+        indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
+        return;
+    }
+
+    int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
+
+    // Shift à esquerda a partir do removido -- VER
+    for (int i = indice_Serv;
+         i < utilizadores[indiceCliente].servicos_ativos - 1;
+         i++) {
+        utilizadores[indiceCliente].servicos[i] =
+            utilizadores[indiceCliente].servicos[i+1];
+    }
+
+    utilizadores[indiceCliente].servicos_ativos--;
+    nServicos--;
+
+    printf("[CONTROLADOR] Servico removido: %d\n", idRemovido);
+}
+
+void * gestor_comandos_controlador(void * arg){
     while(running){
         char comando [MAXCMD];
 
@@ -19,37 +228,44 @@ void * gestor_comandos_controlador(void * arg){
         if (fgets(comando, sizeof(comando), stdin) == NULL) {
             break;
         }
+
         comando[strcspn(comando, "\n")] = '\0';
-         if (strcmp(comando, "hora") == 0) {
-            printf("[CONTROLADOR] Tempo simulado: %d\n", tempo);
+        if (strcmp(comando, "hora") == 0) {
+            printf("\n--------------------------------\n");
+            printf("\n          Tempo Simulado        \n");
+            printf("\n--------------------------------\n");
+            printf("\n  Tempo atual: %d segundos      \n ", tempo);
+            printf("\n--------------------------------\n");
         }
         else if (strcmp(comando, "km") == 0) {
-            printf("[CONTROLADOR] Total km percorridos: %d\n", kms);
+            printf("\n--------------------------------\n");
+            printf("\n     Quilometros percorridos    \n");
+            printf("\n--------------------------------\n");
+            printf("\n  Tempo atual: %d km.           \n ", kms);
+            printf("\n--------------------------------\n");
         }
         else if (strcmp(comando, "utiliz") == 0) {
-            printf("listar_utilizadores()");
+            listarUtilizadores();
         }
         else if (strcmp(comando, "listar") == 0) {
-             printf("listar_servicos()");
+            listarServicos();
         }
         else if (strncmp(comando, "cancelar", 8) == 0) {
             int id;
+
             if (sscanf(comando, "cancelar %d", &id) != 1) {
-                printf("[CONTROLADOR] Uso: cancelar <id>\n", id);
+                printf("[CONTROLADOR] ✗ Uso: cancelar <id>\n");
+                printf("[CONTROLADOR]   Ou:  cancelar 0  (cancela todos)\n\n");
             } else {
-                /*
-                if (!eliminaServicoLista(id)) {
-                    printf("[CONTROLADOR] Nao foi possivel cancelar o servico com id %d\n", id);
-                }else printf("[CONTROLADOR] Servico com id %d cancelado.\n", id);
-                */
-                printf(" falta logica de cancelar\n");
+                cancelarServicoAdmin(id);
             }
+
         }
         else if (strcmp(comando, "frota") == 0) {
-            printf("[CONTROLADOR] (frota ainda nao implementada)\n");
+            printf("[CONTROLADOR] (frota ainda nao implementada - falta veiculos)\n");
         }
         else if (strcmp(comando, "terminar") == 0) {
-            printf("AA[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
+            printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
             Mensagem acorda;
             int fd_acorda = open(SERVERFIFO, O_WRONLY);
             if (fd_acorda == -1) {
@@ -106,122 +322,6 @@ void * gestor_tempo(void * arg){
     return NULL;
 }
 
-void handler_sigint(int sig) {
-    printf("\n[CONTROLADOR] Sinal recebido. A terminar...\n");
-    running = 0;
-}
-
-void imprimirTipoDePedido(TipoMensagem tipo){
-    switch(tipo){
-        case MSG_AGENDAR:
-            printf("[CONTROLADOR] Pedido do tipo Agendar\n");
-        break;
-        case MSG_CONSULTAR:
-            printf("[CONTROLADOR] Pedido do tipo Consultar\n");
-        break;
-        case MSG_CANCELAR:
-            printf("[CONTROLADOR] Pedido do tipo Cancelar\n");
-        break;
-        case MSG_TERMINAR:
-            printf("[CONTROLADOR] Pedido do tipo Terminar\n");
-        break;
-        default: 
-            printf("[CONTROLADOR] Comando Inválido\n");
-        break;
-    }
-}
-
-/*POSSIVEL MELHORIA NA SEGURANCA
-void mudaChave(int i){
-    utilizadores[i].chave = tempo + utilizadores[i].pid;
-}
-*/
-
-int usernameLogado(char *user) {
-    for (int i = 0; i < nClientes; i++) {
-        if (strcmp(utilizadores[i].username, user) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-int verficaClienteRegistado (char *user, int pid, int chave){
-    for(int i = 0; i < nClientes; i++){
-        if(strcmp(utilizadores[i].username, user)==0){
-            if(utilizadores[i].chave == chave){
-                return i;
-            }
-        }
-    }
-    return -1;
-}
-
-
-void adicionaUtilizador (char *user,  char * fifo_name, int pid){
-    strcpy(utilizadores[nClientes].username, user);
-    strcpy(utilizadores[nClientes].fifo_name, fifo_name);
-    utilizadores[nClientes].pid = pid;
-    utilizadores[nClientes].chave = tempo;
-    utilizadores[nClientes].distancia = 0;
-    utilizadores[nClientes].ativo = 1;
-    utilizadores[nClientes].pagou = 1;
-    utilizadores[nClientes].em_viagem = 0;
-    utilizadores[nClientes].servicos_ativos = 0;
-
-    nClientes++;
-}
-
-void eliminaUtilizador(char * user,int indice){
-    if (indice == -1) {
-        printf("[CONTROLADOR] Falha ao tentar remover utilizador não registado: %s\n", user);
-        return;
-    }
-
-    for(int i = indice; i < nClientes - 1; i++){
-        utilizadores[i] = utilizadores[i+1];
-    }
-    nClientes--;
-
-    //FALTA TERMINAR SERVICOS ATIVOS
-
-    printf("[CONTROLADOR] Utilizador removido: %s\n", user);
-}
-
-int encontraServicoId(int id, int indiceCliente){
-    for(int i = 0; i < utilizadores[indiceCliente].servicos_ativos; i++){
-        if(utilizadores[indiceCliente].servicos[i].id == id) return i;
-    }
-    return -1;
-}
-
-void eliminaServicoLista(int id){
-
-}
-
-void eliminaServico(int indice_Serv, int indiceCliente){
-    if (indice_Serv < 0 ||
-        indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
-        return;
-    }
-
-    int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
-
-    // Shift à esquerda a partir do removido -- VER
-    for (int i = indice_Serv;
-         i < utilizadores[indiceCliente].servicos_ativos - 1;
-         i++) {
-        utilizadores[indiceCliente].servicos[i] =
-            utilizadores[indiceCliente].servicos[i+1];
-    }
-
-    utilizadores[indiceCliente].servicos_ativos--;
-    nServicos--;
-
-    printf("[CONTROLADOR] Servico removido: %d\n", idRemovido);
-}
-
-
 int main(int argc, char * argv[]){
     int TotalServicos = 0;
     int totalTentativasLigacao = 0;
@@ -241,7 +341,7 @@ int main(int argc, char * argv[]){
     }
 
     printf("\n----------------------------------------------------------------------------\n");
-    printf("\n                        SISTEMA DE TÁXIS AUTÓNOMOS                          \n");
+    printf("\n                        SISTEMA DE TAXIS AUTONOMOS                          \n");
     printf("\n----------------------------------------------------------------------------\n\n");
 
     if (access(SERVERFIFO, F_OK) == 0) {
@@ -250,7 +350,6 @@ int main(int argc, char * argv[]){
     }
 
     //signal(SIGINT, handler_sigint);
-
     if (mkfifo(SERVERFIFO, 0666) == -1) {
         if (errno != EEXIST) {
         perror("[CONTROLADOR] Erro na criacao do named pipe");
@@ -325,7 +424,7 @@ int main(int argc, char * argv[]){
             int indiceCliente = verficaClienteRegistado(pedido.username, pedido.pid, pedido.chave);
             if (indiceCliente == -1) {
                 // cliente não autenticado
-                strcpy(resp.msg, "[Controlador] Utilizador não autenticado.");
+                strcpy(resp.msg, "[CONTROLADOR] Utilizador não autenticado.");
                 resp.tipo = MSG_NAOAUTENTICADO;
             } else {
                 resp.chave = utilizadores[indiceCliente].chave;
@@ -342,7 +441,7 @@ int main(int argc, char * argv[]){
                             utilizadores[indiceCliente].servicos[iServico].distancia = pedido.distancia;
                             utilizadores[indiceCliente].servicos[iServico].id = ++idServico;
                             utilizadores[indiceCliente].servicos_ativos ++;
-                            sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",
+                            sprintf(resp.msg, "[CONTROLADOR] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",
                                 utilizadores[indiceCliente].servicos[iServico].username,
                                 utilizadores[indiceCliente].servicos[iServico].id, 
                                 utilizadores[indiceCliente].servicos[iServico].hora, 
@@ -350,7 +449,7 @@ int main(int argc, char * argv[]){
                                 utilizadores[indiceCliente].servicos[iServico].distancia);
                             nServicos++;
                         }else{
-                            sprintf(resp.msg, "[Controlador] Pedido de agendamento de %s rejeitado!",pedido.username);
+                            sprintf(resp.msg, "[CONTROLADOR] Pedido de agendamento de %s rejeitado!",pedido.username);
                             resp.tipo = MSG_RECUSA;
                         }
                         printf("%s\n",resp.msg);
@@ -370,7 +469,7 @@ int main(int argc, char * argv[]){
                         printf("%s\n",resp.msg);
                         }else{
                             resp.tipo = MSG_RECUSA;
-                            sprintf(resp.msg, "[Controlador] Utilizador %s nao tem nenhum Servico ativo neste momento!",pedido.username);
+                            sprintf(resp.msg, "[CONTROLADOR] Utilizador %s nao tem nenhum Servico ativo neste momento!",pedido.username);
                             printf("%s\n",resp.msg);
                         }
                         break;
@@ -381,19 +480,19 @@ int main(int argc, char * argv[]){
                             while (utilizadores[indiceCliente].servicos_ativos > 0) {
                                 eliminaServico(0, indiceCliente);
                             }
-                            strcpy(resp.msg, "[Controlador] Todos os servicos do utilizador apagados!");
+                            strcpy(resp.msg, "[CONTROLADOR] Todos os servicos do utilizador apagados!");
                             resp.tipo = MSG_ACEITA;
                         } else {
                             if (indice != -1) {
                                 eliminaServico(indice, indiceCliente);
                                 resp.tipo = MSG_ACEITA;
                                 sprintf(resp.msg,
-                                        "[Controlador] Servico com id: %d cancelado",
+                                        "[CONTROLADOR] Servico com id: %d cancelado",
                                         pedido.servico_id);
                             } else {
                                 resp.tipo = MSG_RECUSA;
                                 sprintf(resp.msg,
-                                        "[Controlador] Nao foi possivel efetuar o cancelamento do servico com id: %d",
+                                        "[CONTROLADOR] Nao foi possivel efetuar o cancelamento do servico com id: %d",
                                         pedido.servico_id);
                             }
                         }
@@ -411,17 +510,17 @@ int main(int argc, char * argv[]){
                             
                             
                             eliminaUtilizador(pedido.username,indiceCliente);
-                            strcpy(resp.msg, "[Controlador] Espero que tenha gostado dos nossos servicos! Volte sempre!");
+                            strcpy(resp.msg, "[CONTROLADOR] Espero que tenha gostado dos nossos servicos! Volte sempre!");
                             
                             resp.tipo = MSG_ACEITA;
                         } else {
-                            strcpy(resp.msg, "[Controlador] Não pode terminar agora (serviço ativo ou pagamento em falta).");
+                            strcpy(resp.msg, "[CONTROLADOR] Não pode terminar agora (serviço ativo ou pagamento em falta).");
                             resp.tipo = MSG_RECUSA;
                         }
                         break;
                     default:
                         printf("\n ----> Comando inválido!\n");
-                        strcpy(resp.msg, "[Controlador] Comando inválido.");
+                        strcpy(resp.msg, "[CONTROLADOR] Comando inválido.");
                         break;
                 }
             }
