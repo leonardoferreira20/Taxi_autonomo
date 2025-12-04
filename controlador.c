@@ -158,6 +158,28 @@ void listarServicos() {
     printf("-----------------------------------------------------------------------------\n");
 }
 
+void eliminaServico(int indice_Serv, int indiceCliente){
+    if (indice_Serv < 0 ||
+        indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
+        return;
+    }
+
+    int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
+
+    // Shift à esquerda a partir do removido -- VER
+    for (int i = indice_Serv;
+         i < utilizadores[indiceCliente].servicos_ativos - 1;
+         i++) {
+        utilizadores[indiceCliente].servicos[i] =
+            utilizadores[indiceCliente].servicos[i+1];
+    }
+
+    utilizadores[indiceCliente].servicos_ativos--;
+    nServicos--;
+
+    printf("[CONTROLADOR] Servico removido: %d\n", idRemovido);
+}
+
 void cancelarServicoAdmin(int id){
     if (id == 0) {
         // CANCELAR TODOS OS SERVIÇOS
@@ -197,27 +219,6 @@ void cancelarServicoAdmin(int id){
     printf("[CONTROLADOR] ✗ Serviço #%d não encontrado!\n\n", id);
 }
 
-void eliminaServico(int indice_Serv, int indiceCliente){
-    if (indice_Serv < 0 ||
-        indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
-        return;
-    }
-
-    int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
-
-    // Shift à esquerda a partir do removido -- VER
-    for (int i = indice_Serv;
-         i < utilizadores[indiceCliente].servicos_ativos - 1;
-         i++) {
-        utilizadores[indiceCliente].servicos[i] =
-            utilizadores[indiceCliente].servicos[i+1];
-    }
-
-    utilizadores[indiceCliente].servicos_ativos--;
-    nServicos--;
-
-    printf("[CONTROLADOR] Servico removido: %d\n", idRemovido);
-}
 
 void * gestor_comandos_controlador(void * arg){
     while(running){
@@ -291,7 +292,7 @@ void * gestor_comandos_controlador(void * arg){
 void * gestor_tempo(void * arg){
     while(running){
         ++tempo;
-        if(tempo==1000000)
+        if(tempo==100000000000)
             {int fd_taxi[2];
             //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
             //na posicao 0 fica a extremidade de leitura que nao vai ser usada
@@ -317,7 +318,7 @@ void * gestor_tempo(void * arg){
                 //serao feitos reads na posicao 0 do fd taxi
             }}
         
-        sleep(1);
+        sleep(TEMPOINSTANTE);
     }
     return NULL;
 }

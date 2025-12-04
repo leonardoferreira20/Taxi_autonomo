@@ -209,7 +209,7 @@ int enviar_consultar(int fd, int fd_privado, const char *username, Mensagem *ped
 
     Mensagem resposta;
     memset(&resposta, 0, sizeof(resposta));
-    usleep(100 * 10000);
+    usleep(TEMPODEASSINCRONAR);
     int nbytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nbytes == -1) {
         if (errno != EINTR) {
@@ -251,7 +251,7 @@ int enviar_cancelar(int fd,int fd_privado, const char *username,Mensagem *pedido
 
     Mensagem resposta;
     memset(&resposta, 0, sizeof(resposta));
-    usleep(100 * 10000);
+    usleep(TEMPODEASSINCRONAR);
     int nbytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nbytes == -1) {
         if (errno != EINTR) {
@@ -282,7 +282,7 @@ int enviar_terminar(int fd, int fd_privado, const char *username, Mensagem *pedi
 
     Mensagem resposta_termino;
     memset(&resposta_termino, 0, sizeof(resposta_termino));
-    usleep(100 * 10000);
+    usleep(TEMPODEASSINCRONAR);
     int nbytes = read(fd_privado, &resposta_termino, sizeof(resposta_termino));
     if (nbytes == -1) {
         if (errno != EINTR) {
@@ -436,7 +436,7 @@ int main(int argc, char* argv[]){
     }
 
     // AGUARDAR RESPSOTA DO LOGIN
-    usleep(100 * 10000);
+    usleep(TEMPODEASSINCRONAR);
     ssize_t nBytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nBytes <= 0) {
         fprintf(stderr, "[CLIENTE] Erro ao receber resposta do login\n");
