@@ -23,6 +23,8 @@
 #define TEMPOINSTANTE 5
 //#define TEMPODEASSINCRONAR 100 * 1000
 
+#define VARAMB "NVEICULO"
+
 #define MAX_USERNAME 50
 #define MAX_LOCAL 100
 #define MAX_DESTINO 100
@@ -67,7 +69,8 @@ typedef enum {
 	MSG_NOTIFICACAO = 9,
 	MSG_ACEITA = 10,
 	MSG_RECUSA = 11,
-	MSG_NAOAUTENTICADO = 12
+	MSG_NAOAUTENTICADO = 12,
+	MSG_ADMINSHUTDOWN = 13
 } TipoMensagem;
 
 // AUTENTICAÇÃO
@@ -105,6 +108,11 @@ typedef struct {
 	int distancia;
 	char local[MAX_LOCAL];
 } Servico_Marcado;
+
+typedef struct{
+	int nServicos;
+	Servico_Marcado servicosT[MAX_SERVICES];
+} Servico_Taxi;
 
 typedef struct {
 	char username[MAX_USERNAME];

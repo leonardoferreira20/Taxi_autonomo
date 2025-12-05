@@ -3,6 +3,7 @@ int running = 1;
 int tempo = TEMPO_INICIAL;
 Utilizador utilizadores[MAXCLI];
 Servico_Marcado marcados[MAX_SERVICES];
+
 int nServicos = 0;
 int nClientes = 0;
 int idServico = 0;
@@ -166,7 +167,7 @@ void eliminaServico(int indice_Serv, int indiceCliente){
 
     int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
 
-    // Shift à esquerda a partir do removido -- VER
+    // Shift à esquerda a partir do removido
     for (int i = indice_Serv;
          i < utilizadores[indiceCliente].servicos_ativos - 1;
          i++) {
@@ -198,7 +199,7 @@ void cancelarServicoAdmin(int id){
         return;
     }
     
-    // CANCELAR SERVIÇO ESPECÍFICO
+    // CANCELAR SERVIÇO ESPECIFICO
     for (int i = 0; i < nClientes; i++) {
         int indice = encontraServicoId(id, i);
         if (indice != -1) {
@@ -273,6 +274,7 @@ void * gestor_comandos_controlador(void * arg){
                 perror("[CONTROLADOR] Erro a abrir SERVERFIFO para acordar o main");
             }else {
                 strcpy(acorda.msg,"Acorda burro!\n");
+                acorda.tipo = MSG_ADMINSHUTDOWN;
                 if (write(fd_acorda, &acorda, sizeof(acorda)) == -1) {
                     perror("[CONTROLADOR] Erro a escrever mensagem fake");
                 }
@@ -328,6 +330,22 @@ int main(int argc, char * argv[]){
     int totalTentativasLigacao = 0;
     int totalUtilizadoresLigados = 0;
     int totalUtilizadoresRejeitados = 0;
+
+    //DEFENIR VARIAVEL DE AMBIENTE EM STRING
+    if (setenv(VARAMB, "30", 1)!=0){
+        perror("setenv failed");
+        return 1;
+    }
+
+    //IR BUSCAR A VARIAVEL DE AMBIENTE
+    const char *value = getenv(VARAMB);
+
+    //VERIFICAR O VALOR OU SE NAO EXISTE
+    if(value!= NULL){
+        printf("VARAMB = %s\n", value);
+    }else {
+        printf("Variavel de ambient nao encontrada!\n");
+    }
 
     struct sigaction sa;
     sa.sa_handler = handler_sigint;
@@ -394,6 +412,10 @@ int main(int argc, char * argv[]){
             }
             break;
         }
+
+        if(strcmp(pedido.msg,"Acorda burro!\n")==0 && pedido.tipo == MSG_ADMINSHUTDOWN){
+            continue;
+        };
 
         // Preparar resposta base
         resp.tipo = MSG_RESPOSTA;
@@ -508,7 +530,6 @@ int main(int argc, char * argv[]){
                         if (utilizadores[indiceCliente].pagou == 1 &&
                             utilizadores[indiceCliente].em_viagem == 0 &&
                             utilizadores[indiceCliente].servicos_ativos == 0) {
-                            
                             
                             eliminaUtilizador(pedido.username,indiceCliente);
                             strcpy(resp.msg, "[CONTROLADOR] Espero que tenha gostado dos nossos servicos! Volte sempre!");

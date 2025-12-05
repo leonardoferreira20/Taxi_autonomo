@@ -11,6 +11,8 @@ int main(int argc, char * argv[]){
 
   while(kms != destino){
     ++kms;
+    
+
     sleep (TEMPOINSTANTE);
   }
 
