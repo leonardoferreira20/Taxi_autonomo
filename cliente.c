@@ -137,9 +137,10 @@ ComandoParsed parsear_comando(const char *linha) {
 }
 
 // HANDLER PARA DETETAR MORTE DO CONTROLADOR (SIGPIPE)
-void handler_pipe(int sig) {
+void handler_pipe(int sig, siginfo_t *siginfo, void *ctx) {
     (void)sig;
     controlador_ativo = 0;
+    if(sig == SIGUSR1) printf("\n[CONTROLADOR]O banco terminou. Termino forcado do Sistema!\n");
     printf("\n[CLIENTE] A interromper cliente ....\n");
 }
 
@@ -349,10 +350,13 @@ int main(int argc, char* argv[]){
     memset(&resposta, 0, sizeof(resposta));
     
     struct sigaction sa;
-    sa.sa_handler = handler_pipe;
-    sigemptyset(&sa.sa_mask);
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = handler_pipe;
     sa.sa_flags = SA_SIGINFO;
-    sigaction(SIGINT, &sa, NULL);
+    sigemptyset(&sa.sa_mask);
+
+    sigaction(SIGUSR1, &sa, NULL);
+    sigaction(SIGINT,  &sa, NULL);
 
     // VERIFICACAO DE NUMERO DE ARGUMENTOS
     if (argc != 2){

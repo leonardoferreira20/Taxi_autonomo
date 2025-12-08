@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <pthread.h>
 
 // CONSTANTES
 #define MAXCMD 256
@@ -106,6 +107,7 @@ typedef struct {
 	int id;
 	int hora;
 	int distancia;
+	char estado[15];
 	char local[MAX_LOCAL];
 } Servico_Marcado;
 
@@ -128,8 +130,18 @@ typedef struct {
 } Utilizador;
 
 typedef struct {
-	char username[MAX_USERNAME];
-	int nServicos;
+    int ativo;                // 0 = livre, 1 = em uso
+
+    int indiceCliente;
+    int indiceServico;
+
+    pid_t pid_veiculo;        // PID do processo veiculo (depois do fork)
+
+    int fd_leitura;      // fd do lado de leitura do pipe anonimo
+
+    char fifo_cliente[MAX_MSG];
+    char local[MAX_LOCAL];
+    int distancia;
 } Viagem;
 
 // COMANDOS - CLIENTE

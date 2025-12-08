@@ -3,12 +3,15 @@ int running = 1;
 int tempo = TEMPO_INICIAL;
 Utilizador utilizadores[MAXCLI];
 Servico_Marcado marcados[MAX_SERVICES];
-
+Viagem viagens[30];
+int nViagens;
 int nServicos = 0;
 int nClientes = 0;
 int idServico = 0;
 int kms = 0;
 int fd_servidor = -1;
+
+pthread_mutex_t mutex_servicos = PTHREAD_MUTEX_INITIALIZER;
 
 void handler_sigint(int sig) {
     printf("\n[CONTROLADOR] Sinal recebido. A terminar...\n");
@@ -145,10 +148,8 @@ void listarServicos() {
         
         for (int i = 0; i < nClientes; i++) {
             for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
-                // Determinar estado (por agora só AGENDADO, depois adicionar EM_EXECUCAO)
-                char *estado = "AGENDADO";
-                
-                printf("\n    %d  │ %s           │ %d   │ %s       │ %d │ %s      \n", utilizadores[i].servicos[j].id, utilizadores[i].servicos[j].username, utilizadores[i].servicos[j].hora, utilizadores[i].servicos[j].local, utilizadores[i].servicos[j].distancia, estado);
+                // Determinar estado (por agora só AGENDADO, depois adicionar EM_EXECUCAO)        
+                printf("\n    %d  │ %s           │ %d   │ %s       │ %d │ %s      \n", utilizadores[i].servicos[j].id, utilizadores[i].servicos[j].username, utilizadores[i].servicos[j].hora, utilizadores[i].servicos[j].local, utilizadores[i].servicos[j].distancia, utilizadores[i].servicos[j].estado);
                 encontrou = 1;
             }
         }
@@ -292,34 +293,58 @@ void * gestor_comandos_controlador(void * arg){
 }
 
 void * gestor_tempo(void * arg){
+    //IR BUSCAR A VARIAVEL DE AMBIENTE
+    const char *valueEnv = getenv(VARAMB);
+
+    //VERIFICAR O VALOR OU SE NAO EXISTE
+    if(valueEnv!= NULL){
+        int valueAmb = atoi(valueEnv);
+        printf("VARAMB = %s\n", valueAmb);
+    }else {
+        printf("Variavel de ambient nao encontrada!\n");
+    }
+    
     while(running){
-        ++tempo;
-        if(tempo==100000000000)
-            {int fd_taxi[2];
-            //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
-            //na posicao 0 fica a extremidade de leitura que nao vai ser usada
-            //na posicao 1 fica a extremidade de escrita que vai ser usada
-            //para o veiculo mandar mensagens ao controlador
-            if(pipe(fd_taxi)==-1){
-                perror("Erro na abertura de pipe anonimo");
-            }
-            pid_t pid = fork();
-            if(pid < 0){
-                perror("Failed fork!");
-            }
-            //Este é o codigo que o processo filho
-            //que acabou de ser criado vai executar
-            if(pid == 0){
-                close(fd_taxi[0]); //Fechar o lado de leitura
-                dup2(fd_taxi[1],STDOUT_FILENO); //Estamos a substituir o STDOUT pela extremidade do pipe-anonimo
-                close(fd_taxi[1]);
-                //execl("./veiculo","veiculo",/*local*/,/*distancia*/,NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
-            }else{//isto sera paa o controlador receber as mensagens dos veiculos
-                close(fd_taxi[1]);
-                //O pai vai ler do veiculo na posicao 0 do fd_taxi
-                //serao feitos reads na posicao 0 do fd taxi
-            }}
         
+        ++tempo;
+        
+        pthread_mutex_lock(&mutex_servicos);
+
+        for (int i = 0; i < nClientes; i++) {
+            for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
+
+                if(utilizadores[i].servicos[j].hora == tempo && strcmp(utilizadores[i].servicos[j].estado,"Agendado")==0){
+                    int fd_taxi[2];
+                    //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
+                    //na posicao 0 fica a extremidade de leitura que nao vai ser usada
+                    //na posicao 1 fica a extremidade de escrita que vai ser usada
+                    //para o veiculo mandar mensagens ao controlador
+                    if(pipe(fd_taxi)==-1){
+                        perror("Erro na abertura de pipe anonimo");
+                    }
+                    pid_t pid = fork();
+                    if(pid < 0){
+                        perror("Failed fork!");
+                    }
+                    //Este é o codigo que o processo filho
+                    //que acabou de ser criado vai executar
+                    if(pid == 0){
+                        close(fd_taxi[0]); //Fechar o lado de leitura
+                        dup2(fd_taxi[1],STDOUT_FILENO); //Estamos a substituir o STDOUT pela extremidade do pipe-anonimo
+                        close(fd_taxi[1]);
+                        //execl("./veiculo","veiculo",/*local*/,/*distancia*/,NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
+                    }else{//isto sera paa o controlador receber as mensagens dos veiculos
+                        close(fd_taxi[1]);
+                        //O pai vai ler do veiculo na posicao 0 do fd_taxi
+                        //serao feitos reads na posicao 0 do fd taxi
+                    }}
+
+
+            }
+        }
+
+        pthread_mutex_unlock(&mutex_servicos);
+
         sleep(TEMPOINSTANTE);
     }
     return NULL;
@@ -335,16 +360,6 @@ int main(int argc, char * argv[]){
     if (setenv(VARAMB, "30", 1)!=0){
         perror("setenv failed");
         return 1;
-    }
-
-    //IR BUSCAR A VARIAVEL DE AMBIENTE
-    const char *value = getenv(VARAMB);
-
-    //VERIFICAR O VALOR OU SE NAO EXISTE
-    if(value!= NULL){
-        printf("VARAMB = %s\n", value);
-    }else {
-        printf("Variavel de ambient nao encontrada!\n");
     }
 
     struct sigaction sa;
@@ -454,6 +469,9 @@ int main(int argc, char * argv[]){
                 switch (pedido.tipo) {
                     case MSG_AGENDAR:
                         printf("\n----> Funcao Agendar\n");
+
+                        pthread_mutex_lock(&mutex_servicos);
+
                         // Falta veiculo e disticao de servico marcado para seguir ou previsto
                         if(nServicos<MAX_SERVICES && utilizadores[indiceCliente].servicos_ativos <MAX_SERVICES){
                             resp.tipo = MSG_ACEITA;
@@ -462,6 +480,7 @@ int main(int argc, char * argv[]){
                             strcpy(utilizadores[indiceCliente].servicos[iServico].local,pedido.local);
                             utilizadores[indiceCliente].servicos[iServico].hora = pedido.hora;
                             utilizadores[indiceCliente].servicos[iServico].distancia = pedido.distancia;
+                            strcpy(utilizadores[indiceCliente].servicos[iServico].estado,"Agendado");
                             utilizadores[indiceCliente].servicos[iServico].id = ++idServico;
                             utilizadores[indiceCliente].servicos_ativos ++;
                             sprintf(resp.msg, "[CONTROLADOR] Pedido de agendamento de %s recebido: id:%d horas:%dh local:%s distancia: %d",
@@ -476,9 +495,14 @@ int main(int argc, char * argv[]){
                             resp.tipo = MSG_RECUSA;
                         }
                         printf("%s\n",resp.msg);
+
+                        pthread_mutex_unlock(&mutex_servicos);
+                        
                         break;
                     case MSG_CONSULTAR:
                         resp.tipo = MSG_CONSULTAR;
+
+                        pthread_mutex_lock(&mutex_servicos);
 
                         if(utilizadores[indiceCliente].servicos_ativos > 0){
                             resp.tipo = MSG_ACEITA;
@@ -495,6 +519,9 @@ int main(int argc, char * argv[]){
                             sprintf(resp.msg, "[CONTROLADOR] Utilizador %s nao tem nenhum Servico ativo neste momento!",pedido.username);
                             printf("%s\n",resp.msg);
                         }
+
+                        pthread_mutex_unlock(&mutex_servicos);
+
                         break;
                     case MSG_CANCELAR:
                         int indice = encontraServicoId(pedido.servico_id, indiceCliente);
@@ -527,6 +554,9 @@ int main(int argc, char * argv[]){
                         break;
                     case MSG_TERMINAR:
                         resp.tipo = MSG_TERMINAR;
+
+                        pthread_mutex_lock(&mutex_servicos);
+
                         if (utilizadores[indiceCliente].pagou == 1 &&
                             utilizadores[indiceCliente].em_viagem == 0 &&
                             utilizadores[indiceCliente].servicos_ativos == 0) {
@@ -539,6 +569,9 @@ int main(int argc, char * argv[]){
                             strcpy(resp.msg, "[CONTROLADOR] Não pode terminar agora (serviço ativo ou pagamento em falta).");
                             resp.tipo = MSG_RECUSA;
                         }
+
+                        pthread_mutex_unlock(&mutex_servicos);
+                        
                         break;
                     default:
                         printf("\n ----> Comando inválido!\n");
@@ -570,12 +603,26 @@ int main(int argc, char * argv[]){
     pthread_cancel(thread_linha_comando); //Cancela a thread para sair do fgets se é bonito ou nao nao sei mas funciona!!!
     pthread_join(thread_linha_comando, NULL);
     
-    /* Encerrar os clientes no array de clientes - enviar mensagem a cada um deles
-    for(int i = 0; i < nClientes;i++){
-        
+    //Encerrar os clientes no array de clientes - enviar mensagem a cada um deles
+    union sigval sigValue;
+    for (int i = 0; i < nClientes; i++){
+        sigqueue(utilizadores[i].pid, SIGUSR1, sigValue);
+        /*
+        int fd_cliente = open(utilizadores[i].fifo_name, O_WRONLY);
+        if (fd_cliente == -1) {
+            perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita");
+            // não conseguimos responder, mas não rebentamos o servidor
+        } else {
+            if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
+                perror("[CONTROLADOR] Erro ao enviar resposta ao cliente");
+            }
+            close(fd_cliente);
+        }
+        write(utilizadores[i].fifo_name);
+        */
     }
 
-    */
+
     close(fd_servidor);
     unlink(SERVERFIFO);
 
