@@ -9,7 +9,7 @@ OBJS = controlador.o cliente.o veiculo.o
 all: $(CONTROLADOR) $(CLIENTE) $(VEICULO)
 
 # Compilar objectos
-ontrolador.o: controlador.c Settings.h
+controlador.o: controlador.c Settings.h
 	$(CC) $(CFLAGS) -c controlador.c -o controlador.o
 
 cliente.o: cliente.c Settings.h
@@ -23,18 +23,11 @@ veiculo.o: veiculo.c Settings.h
 $(CONTROLADOR): controlador.o
 	$(CC) controlador.o -o $(CONTROLADOR)
 
-$(CLIENT): cliente.o
+$(CLIENTE): cliente.o
 	$(CC) cliente.o -o $(CLIENTE)
 
 $(VEICULO): veiculo.o
 	$(CC) veiculo.o -o $(VEICULO)
-
-# Executar controlador com variável de ambiente
-run-server: $(CONTROLADOR)
-	@echo "Starting server with NVEICULOS=4..."
-	NVEICULOS=4 ./controlador
-
-
 
 # Executar cliente
 run-client: $(CLIENTE)

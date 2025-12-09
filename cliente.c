@@ -106,24 +106,7 @@ ComandoParsed parsear_comando(const char *linha) {
         
         cmd.valido = 1;
         
-    } else if (strcmp(cmd.comando, "entrar") == 0) {
-        // entrar <destino>
-        
-        token = strtok_r(NULL, " \t", &saveptr);
-        if (token == NULL) {
-            printf("[CLIENTE] Erro: falta argumento <destino>\n");
-            printf("Uso: entrar <destino>\n");
-            return cmd;
-        }
-        strncpy(cmd.destino, token, MAX_DESTINO - 1);
-        
-        cmd.valido = 1;
-        
-    } else if (strcmp(cmd.comando, "sair") == 0) {
-        // sair (sem argumentos)
-        cmd.valido = 1;
-        
-    } else if (strcmp(cmd.comando, "terminar") == 0) {
+    }  else if (strcmp(cmd.comando, "terminar") == 0) {
         // terminar (sem argumentos)
         cmd.valido = 1;
         
@@ -140,7 +123,7 @@ ComandoParsed parsear_comando(const char *linha) {
 void handler_pipe(int sig, siginfo_t *siginfo, void *ctx) {
     (void)sig;
     controlador_ativo = 0;
-    if(sig == SIGUSR1) printf("\n[CONTROLADOR]O banco terminou. Termino forcado do Sistema!\n");
+    if(sig == SIGUSR1) printf("\n[CONTROLADOR]O Controlador terminou. Termino forcado do Sistema!\n");
     printf("\n[CLIENTE] A interromper cliente ....\n");
 }
 
@@ -152,8 +135,6 @@ void mostrar_ajuda() {
     printf("\t> agendar <hora> <local> <distancia>\n");
     printf("\t> consultar\n");
     printf("\t> cancelar <id>     (0 = cancelar todos)\n");
-    printf("\t> entrar <destino>\n");
-    printf("\t> sair\n");
     printf("\t> terminar");
     printf("\n-------------------------------------------------------\n");
 }
@@ -315,21 +296,10 @@ int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, co
     } else if (strcmp(cmd->comando, "cancelar") == 0) {
         return enviar_cancelar(fd_controlador, fd_privado, username,pedido, cmd->id);
         
-    } else if (strcmp(cmd->comando, "entrar") == 0) {
-        // TODO: Enviar para veículo (não controlador)
-        printf("[CLIENTE] TODO: enviar 'entrar' para veículo\n");
-        return 0;
-        
-    } else if (strcmp(cmd->comando, "sair") == 0) {
-        // TODO: Enviar para veículo (não controlador)
-        printf("[CLIENTE] TODO: enviar 'sair' para veículo\n");
-        return 0;
-        
     } else if (strcmp(cmd->comando, "terminar") == 0) {
         // Verificar se está em serviço
         /* if (em_servico) {
             printf("[CLIENTE] Não pode terminar enquanto está em serviço!\n");
-            printf("[CLIENTE] Aguarde o fim da viagem ou use 'sair'\n");
             return -1;
         } */
         return enviar_terminar(fd_controlador,fd_privado, username, pedido);

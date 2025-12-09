@@ -63,15 +63,13 @@ typedef enum {
 	MSG_AGENDAR = 2,
 	MSG_CONSULTAR = 3,
 	MSG_CANCELAR = 4,
-	MSG_ENTRAR = 5,
-	MSG_SAIR = 6,
-	MSG_RESPOSTA = 7,
-	MSG_TERMINAR = 8,
-	MSG_NOTIFICACAO = 9,
-	MSG_ACEITA = 10,
-	MSG_RECUSA = 11,
-	MSG_NAOAUTENTICADO = 12,
-	MSG_ADMINSHUTDOWN = 13
+	MSG_RESPOSTA = 5,
+	MSG_TERMINAR = 6,
+	MSG_NOTIFICACAO = 7,
+	MSG_ACEITA = 8,
+	MSG_RECUSA = 9,
+	MSG_NAOAUTENTICADO = 10,
+	MSG_ADMINSHUTDOWN = 11
 } TipoMensagem;
 
 // AUTENTICAÇÃO
@@ -132,6 +130,7 @@ typedef struct {
 typedef struct {
     int ativo;                // 0 = livre, 1 = em uso
 
+	int nTaxi;
     int indiceCliente;
     int indiceServico;
 
@@ -139,6 +138,7 @@ typedef struct {
 
     int fd_leitura;      // fd do lado de leitura do pipe anonimo
 
+	char username[MAX_USERNAME];
     char fifo_cliente[MAX_MSG];
     char local[MAX_LOCAL];
     int distancia;
@@ -160,5 +160,10 @@ typedef struct {
 	int thread_id;
 } ThreadClienteArgs;
 
+typedef struct {
+	char msg[MAX_MSG];
+	int em_viagem; //1 em viagem e 0 acaba
+	float kms;
+} Telemetria;
 
 #endif

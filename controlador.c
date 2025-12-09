@@ -8,7 +8,7 @@ int nViagens;
 int nServicos = 0;
 int nClientes = 0;
 int idServico = 0;
-int kms = 0;
+float kms = 0;
 int fd_servidor = -1;
 
 pthread_mutex_t mutex_servicos = PTHREAD_MUTEX_INITIALIZER;
@@ -244,7 +244,7 @@ void * gestor_comandos_controlador(void * arg){
             printf("\n--------------------------------\n");
             printf("\n     Quilometros percorridos    \n");
             printf("\n--------------------------------\n");
-            printf("\n  Tempo atual: %d km.           \n ", kms);
+            printf("\n  Kms percorridos: %.2f km.       \n ", kms);
             printf("\n--------------------------------\n");
         }
         else if (strcmp(comando, "utiliz") == 0) {
@@ -292,59 +292,158 @@ void * gestor_comandos_controlador(void * arg){
     pthread_exit(NULL);
 }
 
+void * executaVeiculo (void * arg){
+    //cast para array enviado na thread
+    Viagem *v = (Viagem *)arg;
+    int viagem = 1;
+
+    int fd_taxi[2];
+    //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
+    //na posicao 0 fica a extremidade de leitura que nao vai ser usada
+    //na posicao 1 fica a extremidade de escrita que vai ser usada
+    //para o veiculo mandar mensagens ao controlador
+    if(pipe(fd_taxi)==-1){
+        perror("Erro na abertura de pipe anonimo");
+    }
+
+    pid_t pid = fork();
+    if(pid < 0){
+        perror("Failed fork!");
+    }
+
+    //Este é o codigo que o processo filho
+    //que acabou de ser criado vai executar
+    if(pid == 0){
+        close(fd_taxi[0]); //Fechar o lado de leitura
+        dup2(fd_taxi[1],STDOUT_FILENO); //Estamos a substituir o STDOUT pela extremidade do pipe-anonimo
+        close(fd_taxi[1]);
+
+        //Preparacao das strings para o execl (apnas lê strings ou caracteres tipo terminal)
+        char idTaxi[16];                                     
+        char distancia[16];                                    
+        sprintf(idTaxi, "%d", v->nTaxi);    
+        sprintf(distancia,"%d", v->distancia);
+
+
+        execl("./veiculo","veiculo", idTaxi, v->local,distancia,v->username,NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
+    }else{
+        //isto sera paa o controlador receber as mensagens dos veiculos
+        close(fd_taxi[1]);
+        Telemetria veiculo;
+        Telemetria cliente;
+        memset(&veiculo, 0, sizeof(veiculo));
+        memset(&cliente,0,sizeof(cliente));
+
+        float kmsAnterior = 0.0f;
+        while(viagem){
+            int re = read(fd_taxi[0], &veiculo,sizeof (veiculo));
+            if (re <= 0) {
+                if (re == -1 && errno != EINTR) {
+                    perror("[CONTROLADOR] Erro na leitura da telemetria!");
+                } else {
+                    printf("[CONTROLADOR] Leitura terminada (EOF ou interrompida).\n");
+                }
+                break;
+            }
+            printf("\nmsg ->>>> %s\n", veiculo.msg);
+            printf("em viagem ->>>> %d\n",veiculo.em_viagem);
+            printf("kms ->>>> %.2f\n",veiculo.kms);
+            /*
+            int fd_cliente = open(pedido.fifo_name, O_WRONLY);
+                if (fd_cliente == -1) {
+                perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita da telemetria");
+            // não conseguimos responder, mas não rebentamos o servidor
+            } else {
+                if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
+                    perror("[CONTROLADOR] Erro ao enviar telemetria ao cliente");
+                }
+                close(fd_cliente);
+            }
+            */
+            float incremento = veiculo.kms - kmsAnterior;
+            if(incremento>0){
+                kms += incremento;
+            }
+
+            kmsAnterior = veiculo.kms;
+            
+            if (veiculo.em_viagem == 0) {                    
+                viagem = 0;                                  
+            }
+        }
+        //Rever esta parte na aula
+        close(fd_taxi[0]);                                     // NOVO
+        int status;                                            // NOVO
+        waitpid(pid, &status, 0);
+        //O pai vai ler do veiculo na posicao 0 do fd_taxi
+        //serao feitos reads na posicao 0 do fd taxi
+    }
+    return NULL;
+}
+
 void * gestor_tempo(void * arg){
+    memset(&viagens,0,sizeof(viagens));
+    nViagens = 0;
+    int valueAmb = 0;
+
     //IR BUSCAR A VARIAVEL DE AMBIENTE
     const char *valueEnv = getenv(VARAMB);
 
     //VERIFICAR O VALOR OU SE NAO EXISTE
     if(valueEnv!= NULL){
-        int valueAmb = atoi(valueEnv);
-        printf("VARAMB = %s\n", valueAmb);
+        valueAmb = atoi(valueEnv);
+        printf("VARAMB = %d\n", valueAmb);
     }else {
-        printf("Variavel de ambient nao encontrada!\n");
+        printf("Variavel de ambiente nao encontrada!\n");
     }
     
     while(running){
-        
         ++tempo;
-        
-        pthread_mutex_lock(&mutex_servicos);
+        if(nViagens < valueAmb){
+            pthread_mutex_lock(&mutex_servicos);
+            for (int i = 0; i < nClientes; i++) {
+                for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
+                    if(utilizadores[i].servicos[j].hora == tempo && strcmp(utilizadores[i].servicos[j].estado,"Agendado")==0){ 
+                        int indiceViagens = -1;
+                        for(int k = 0; k < valueAmb;++k){
+                            if (viagens[k].ativo == 0) {
+                                indiceViagens = k;
+                                break;
+                            }
+                        }
 
-        for (int i = 0; i < nClientes; i++) {
-            for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
+                        if (indiceViagens == -1) {
+                            printf("[CONTROLADOR] Nao ha carros livres para a viagem.\n");
+                        }else{
+                            viagens[indiceViagens].ativo = 1;
+                            viagens[indiceViagens].indiceCliente = i;
+                            viagens[indiceViagens].indiceServico = j;
+                            viagens[indiceViagens].nTaxi = indiceViagens;
+                            strcpy(viagens[indiceViagens].username,utilizadores[i].username);
+                            strcpy(viagens[indiceViagens].fifo_cliente,utilizadores[i].fifo_name);
+                            strcpy(viagens[indiceViagens].local,utilizadores[i].servicos[j].local);
+                            viagens[indiceViagens].distancia = utilizadores[i].servicos[j].distancia;
+                            strcpy(utilizadores[i].servicos[j].estado, "Viagem");    
+                            nViagens++;
 
-                if(utilizadores[i].servicos[j].hora == tempo && strcmp(utilizadores[i].servicos[j].estado,"Agendado")==0){
-                    int fd_taxi[2];
-                    //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
-                    //na posicao 0 fica a extremidade de leitura que nao vai ser usada
-                    //na posicao 1 fica a extremidade de escrita que vai ser usada
-                    //para o veiculo mandar mensagens ao controlador
-                    if(pipe(fd_taxi)==-1){
-                        perror("Erro na abertura de pipe anonimo");
+                            printf("[CONTROLADOR] Lançar veiculo para servico id=%d cliente=%s\n",
+                                   utilizadores[i].servicos[j].id,
+                                   utilizadores[i].username);
+                            
+                            pthread_t thread_veiculo;
+                            if(pthread_create(&thread_veiculo, NULL, executaVeiculo, &viagens[indiceViagens]) != 0){
+                                perror("[CONTROLADOR] Erro a criar a thread de veiculo!");
+                                //Ver se da para fazer memset de um indice do array
+                                viagens[indiceViagens].ativo = 0;
+                                eliminaServico(j,i);
+                                nViagens--;
+                            }
+                        }          
                     }
-                    pid_t pid = fork();
-                    if(pid < 0){
-                        perror("Failed fork!");
-                    }
-                    //Este é o codigo que o processo filho
-                    //que acabou de ser criado vai executar
-                    if(pid == 0){
-                        close(fd_taxi[0]); //Fechar o lado de leitura
-                        dup2(fd_taxi[1],STDOUT_FILENO); //Estamos a substituir o STDOUT pela extremidade do pipe-anonimo
-                        close(fd_taxi[1]);
-                        //execl("./veiculo","veiculo",/*local*/,/*distancia*/,NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
-                    }else{//isto sera paa o controlador receber as mensagens dos veiculos
-                        close(fd_taxi[1]);
-                        //O pai vai ler do veiculo na posicao 0 do fd_taxi
-                        //serao feitos reads na posicao 0 do fd taxi
-                    }}
-
-
+                }
             }
+            pthread_mutex_unlock(&mutex_servicos);
         }
-
-        pthread_mutex_unlock(&mutex_servicos);
-
         sleep(TEMPOINSTANTE);
     }
     return NULL;
@@ -548,10 +647,6 @@ int main(int argc, char * argv[]){
                         }
                         printf("%s\n", resp.msg);
                         break;
-                    case MSG_ENTRAR:
-                        break;
-                    case MSG_SAIR:
-                        break;
                     case MSG_TERMINAR:
                         resp.tipo = MSG_TERMINAR;
 
@@ -607,19 +702,6 @@ int main(int argc, char * argv[]){
     union sigval sigValue;
     for (int i = 0; i < nClientes; i++){
         sigqueue(utilizadores[i].pid, SIGUSR1, sigValue);
-        /*
-        int fd_cliente = open(utilizadores[i].fifo_name, O_WRONLY);
-        if (fd_cliente == -1) {
-            perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita");
-            // não conseguimos responder, mas não rebentamos o servidor
-        } else {
-            if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
-                perror("[CONTROLADOR] Erro ao enviar resposta ao cliente");
-            }
-            close(fd_cliente);
-        }
-        write(utilizadores[i].fifo_name);
-        */
     }
 
 
