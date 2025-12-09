@@ -36,27 +36,6 @@
 #define VEICULOFIFO "veiculo"
 #define TEMPO_INICIAL 1
 
-/* typedef enum {
-	AUTHENTICATION,
-	ORDER,
-	USERNAME
-}request_type;
-
-typedef struct {
-	char msg[TAM];
-	int login;
-	int tipo_msg;
-	request_type type;
-} Mensagem;
-
-typedef struct authentication {
-	char username[USERNAME_SIZE];
-	char fifo_name[256];
-	int pid;
-	//bool viagem;
-	//int ativo;
-} Authentication; */
-
 typedef enum {
 	MSG_LIMPA = 0,
 	MSG_LOGIN = 1,

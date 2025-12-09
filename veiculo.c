@@ -1,6 +1,26 @@
 #include "Settings.h"
 int veiculo_running = 1;
 
+void percentagemBarra(char *dest, int percent) {
+    int blocos = percent / 10;   // 0 a 10
+    int pos = 0;
+
+    dest[pos++] = '[';
+
+    // blocos completos
+    for (int i = 0; i < blocos; i++)
+        dest[pos++] = '=';
+
+    if (blocos < 10) {
+        dest[pos++] = '>';
+        // restantes vazios
+        for (int i = blocos + 1; i < 10; i++)
+            dest[pos++] = '-';
+    }
+    dest[pos++] = ']';
+    dest[pos] = '\0';
+}
+
 void handler_signal(int sig, siginfo_t *siginfo, void *ctx) {
     (void)sig;
     (void)siginfo;
@@ -52,7 +72,9 @@ int main(int argc, char * argv[]) {
         float marco_km = distancia * (percent / 100.0);
 
         if ((float)count >= marco_km && percent <= 100) {
-            sprintf(tel.msg, "[VEICULO #%d] %s: %d%% concluida da viagem para o local %s.\n", id, username, percent, local);
+            char barra[16];
+            percentagemBarra(barra, percent);
+            sprintf(tel.msg, "[VEICULO #%d] %s: %s %d%% concluida da viagem para o local %s.\n", id, username,barra, percent, local);
             tel.kms = marco_km;
             write(STDOUT_FILENO, &tel, sizeof(tel));
 
@@ -69,32 +91,3 @@ int main(int argc, char * argv[]) {
 
     return 0;
 }
-
-
-
-
-
-
-
-
-/*
-int main(int argc, char * argv[]){
-  int kms = 0;
-  int destino = *argv[3];
-
-  if (argc!=2){
-    perror("[sistema] Numero invalido de parametros!\n");
-    exit(-1);
-  }
-
-  while(kms != destino){
-    ++kms;
-    printf("alalala");
-
-    sleep (TEMPOINSTANTE);
-  }
-
-
-  return 0;
-}
-  */
