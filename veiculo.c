@@ -67,7 +67,7 @@ int main(int argc, char * argv[]) {
 
     while (veiculo_running && count < distancia) {
         ++count;
-
+        
         // calcular em float a que km corresponde este marco
         float marco_km = distancia * (percent / 100.0);
 
@@ -80,7 +80,7 @@ int main(int argc, char * argv[]) {
 
             percent += 10;  // próximo marco
         }
-          sleep(TEMPOINSTANTE);
+        sleep(TEMPOINSTANTE);
     }
 
     // Reportar fim

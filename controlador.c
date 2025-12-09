@@ -330,7 +330,7 @@ void * executaVeiculo (void * arg){
         //isto sera paa o controlador receber as mensagens dos veiculos
         close(fd_taxi[1]);
         Telemetria veiculo;
-        Telemetria cliente;
+        Mensagem cliente;
         memset(&veiculo, 0, sizeof(veiculo));
         memset(&cliente,0,sizeof(cliente));
 
@@ -348,18 +348,22 @@ void * executaVeiculo (void * arg){
             printf("\nmsg ->>>> %s\n", veiculo.msg);
             printf("em viagem ->>>> %d\n",veiculo.em_viagem);
             printf("kms ->>>> %.2f\n",veiculo.kms);
-            /*
-            int fd_cliente = open(pedido.fifo_name, O_WRONLY);
+            
+            cliente.tipo = MSG_VEICULO;
+            strcpy(cliente.msg, veiculo.msg);
+            cliente.telm.em_viagem = veiculo.em_viagem;
+            cliente.telm.kms = veiculo.kms;
+
+            int fd_cliente = open(v->fifo_cliente, O_WRONLY);
                 if (fd_cliente == -1) {
                 perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita da telemetria");
-            // não conseguimos responder, mas não rebentamos o servidor
             } else {
-                if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
+                if (write(fd_cliente, &cliente, sizeof(cliente)) == -1) {
                     perror("[CONTROLADOR] Erro ao enviar telemetria ao cliente");
                 }
                 close(fd_cliente);
             }
-            */
+
             float incremento = veiculo.kms - kmsAnterior;
             if(incremento>0){
                 kms += incremento;

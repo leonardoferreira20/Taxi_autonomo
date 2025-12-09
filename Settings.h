@@ -45,11 +45,18 @@ typedef enum {
 	MSG_RESPOSTA = 5,
 	MSG_TERMINAR = 6,
 	MSG_NOTIFICACAO = 7,
-	MSG_ACEITA = 8,
-	MSG_RECUSA = 9,
+	MSG_ACEITA = 8, //
+	MSG_RECUSA = 9, //
 	MSG_NAOAUTENTICADO = 10,
-	MSG_ADMINSHUTDOWN = 11
+	MSG_VEICULO = 11,
+	MSG_ADMINSHUTDOWN = 12
 } TipoMensagem;
+
+typedef struct {
+	char msg[MAX_MSG];
+	int em_viagem; //1 em viagem e 0 acaba
+	float kms;
+} Telemetria;
 
 // AUTENTICAÇÃO
 typedef struct {
@@ -61,14 +68,14 @@ typedef struct {
 // MENSAGEM
 typedef struct {
 	TipoMensagem tipo;
+	Telemetria telm;
 	char username[MAX_USERNAME]; // Quem envia
 	char msg[MAX_MSG];           // Mensagem/feedback textual
 	char fifo_name[MAX_MSG];
 	int chave;
 	int pid;
 	int tempo_viagem;
-	char resposta[MAX_MSG];
-	
+	char veredito[10];
 	// Campos específicos (usar conforme o tipo)
 	int hora;
 	char local[MAX_LOCAL];
@@ -139,10 +146,5 @@ typedef struct {
 	int thread_id;
 } ThreadClienteArgs;
 
-typedef struct {
-	char msg[MAX_MSG];
-	int em_viagem; //1 em viagem e 0 acaba
-	float kms;
-} Telemetria;
 
 #endif
