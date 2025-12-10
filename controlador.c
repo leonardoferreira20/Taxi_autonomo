@@ -682,7 +682,7 @@ int main(int argc, char * argv[]){
                     case MSG_AGENDAR:
                         pthread_mutex_lock(&mutex_servicos);
 
-                        if( existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, utilizadores[indiceCliente]) ){
+                        if( pedido->hora > tempo && existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, utilizadores[indiceCliente]) ){
                             resp.tipo = MSG_ACEITA;
                             int iServico = utilizadores[indiceCliente].servicos_ativos;
                             strcpy(utilizadores[indiceCliente].servicos[iServico].username,pedido.username);
@@ -814,7 +814,6 @@ int main(int argc, char * argv[]){
     for (int i = 0; i < nClientes; i++){
         sigqueue(utilizadores[i].pid, SIGUSR1, sigValue);
     }
-
 
     close(fd_servidor);
     unlink(SERVERFIFO);
