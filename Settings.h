@@ -13,16 +13,13 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <pthread.h>
 
 // CONSTANTES
 #define MAXCMD 256
 #define MAXCLI 30
 #define MAX_VEHICLES 10
-#define MAX_SERVICES 3
-#define TEMPODEASSINCRONAR 0
+#define MAX_SERVICES 30
 #define TEMPOINSTANTE 5
-//#define TEMPODEASSINCRONAR 100 * 1000
 
 #define VARAMB "NVEICULO"
 

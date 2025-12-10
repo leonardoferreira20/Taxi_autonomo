@@ -301,7 +301,6 @@ void * gestor_comandos_controlador(void * arg){
         }
         else if (strcmp(comando, "cancelar") == 0) {
             int id;
-
             if (sscanf(comando, "cancelar %d", &id) != 1) {
                 printf("[CONTROLADOR] ✗ Uso: cancelar <id>\n");
                 printf("[CONTROLADOR]   Ou:  cancelar 0  (cancela todos)\n\n");
@@ -314,7 +313,7 @@ void * gestor_comandos_controlador(void * arg){
         }
         else if (strcmp(comando, "terminar") == 0) {
             printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
-
+            running = 0;
             Mensagem acorda;
             int fd_acorda = open(SERVERFIFO, O_WRONLY);
             if (fd_acorda == -1) {
@@ -327,8 +326,6 @@ void * gestor_comandos_controlador(void * arg){
                 }
                 close(fd_acorda);
             }
-
-            running = 0;
         }
         else if (comando[0] != '\0') {
             printf("[CONTROLADOR] Comando invalido: %s\n", comando);
@@ -682,7 +679,7 @@ int main(int argc, char * argv[]){
                     case MSG_AGENDAR:
                         pthread_mutex_lock(&mutex_servicos);
 
-                        if( pedido->hora > tempo && existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, utilizadores[indiceCliente]) ){
+                        if( pedido.hora > tempo && existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, utilizadores[indiceCliente]) ){
                             resp.tipo = MSG_ACEITA;
                             int iServico = utilizadores[indiceCliente].servicos_ativos;
                             strcpy(utilizadores[indiceCliente].servicos[iServico].username,pedido.username);

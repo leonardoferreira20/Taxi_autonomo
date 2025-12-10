@@ -7,13 +7,15 @@ void handler_signal(int sig, siginfo_t *siginfo, void *ctx) {
     (void)siginfo;
     (void)ctx;
     veiculo_running = 0;
+    /*
     if(sig == SIGUSR1) printf("\n[VEICULO] Sinal recebido, a terminar viagem...\n");
     printf("\n[VEICULO] A interromper veiculo ....\n");
+    */
 }
 
 int main(int argc, char * argv[]) {
     if (argc != 5) {
-        fprintf(stderr, "Uso: %s <id> <local> <distancia>\n", argv[0]);
+        fprintf(stderr, "Uso: %s <id> <local> <distancia> <username>\n", argv[0]);
         exit(1);
     }
 
@@ -51,9 +53,7 @@ int main(int argc, char * argv[]) {
         float marco_km = distancia * (percent / 100.0);
 
         if ((float)count >= marco_km && percent <= 100) {
-            //char barra[16];
-            //percentagemBarra(barra, percent);
-            sprintf(tel.msg, "[VEICULO #%d] %s: %d%% concluida da viagem para o local %s.\n", id, username, /* barra, */ percent, local);
+            sprintf(tel.msg, "[VEICULO #%d] %s: %d%% concluida da viagem para o local %s.\n", id, username, percent, local);
             tel.kms = marco_km;
             write(STDOUT_FILENO, &tel, sizeof(tel));
 

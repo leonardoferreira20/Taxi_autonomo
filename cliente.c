@@ -382,7 +382,6 @@ int main(int argc, char* argv[]){
     }
 
     // AGUARDAR RESPSOTA DO LOGIN
-    usleep(TEMPODEASSINCRONAR);
     ssize_t nBytes = read(fd_privado, &resposta, sizeof(resposta));
     if (nBytes <= 0) {
         fprintf(stderr, "[CLIENTE] Erro ao receber resposta do login\n");
