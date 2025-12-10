@@ -11,7 +11,7 @@
 #include <errno.h>
 
 int controlador_ativo = 1;
-
+char username_global[MAX_USERNAME];
 
 // ALTERAR
 ComandoParsed parsear_comando(const char *linha) {
@@ -222,7 +222,6 @@ int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, co
     return 0;
 }
 
-
 void * leituraControlador(void * arg){
     int* p = (int*) arg;
     int fd_privado = *p;
@@ -231,7 +230,6 @@ void * leituraControlador(void * arg){
     memset(&controlador,0,sizeof(controlador));
 
     while(controlador_ativo){
-
         int nbytes = read(fd_privado, &controlador, sizeof(controlador));
         if (nbytes == -1) {
             if (errno != EINTR) {
@@ -239,23 +237,49 @@ void * leituraControlador(void * arg){
             }else{ //Este é o erro do sinal!
                 perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
             }
-                return 0;
+            return 0;
         }
+        
         if(nbytes > 0){
-            if(controlador.tipo == MSG_TERMINAR){
-                controlador_ativo = 0;
-            }else if(controlador.tipo == MSG_CONSULTAR && strcmp(controlador.veredito, "ACEITE")==0){
-                printf("\n------------------------SERVICOS---------------------------------\n");
-                printf("%s\n",controlador.msg);
-                printf("\n-----------------------------------------------------------------\n");
+            switch(controlador.tipo) {
+                case MSG_VEICULO:
+                    // TELEMETRIA DO VEÍCULO
+                    printf("\n %s", controlador.msg);
+                    if(controlador.telm.em_viagem == 0) {
+                        printf("[CLIENTE] ✓ Viagem concluída! Pode agendar novo serviço.\n");
+                    }
+                    break;
+                case MSG_ACEITA:
+                    printf("\n %s\n", controlador.msg);
+                    break;
+                case MSG_RECUSA:
+                    printf("\n %s\n", controlador.msg);
+                    break;
+                case MSG_TERMINAR:
+                    printf("\n[CONTROLADOR] %s\n", controlador.msg);
+                    controlador_ativo = 0;
+                    break;
+                case MSG_CONSULTAR:
+                    if(strcmp(controlador.veredito, "ACEITA")==0){
+                        printf("\n------------------------SERVICOS---------------------------------\n");
+                        printf("%s\n",controlador.msg);
+                        printf("\n-----------------------------------------------------------------\n");
+                    }else {
+                        printf("\n%s\n", controlador.msg);
+                    }
+                    break;
+                default:
+                    printf("\n[CONTROLADOR] %s\n", controlador.msg);
+                    break;
             }
-            printf("%d\n",controlador.tipo);
-            printf("%s\n",controlador.msg);
-        }   
+        }
+    }
+
+    if(controlador_ativo) {
+        printf("\n%s > ", username_global);
+        //fflush(stdout);
     }
 }
-
-
 
 int main(int argc, char* argv[]){
     setbuf(stdout, NULL);
@@ -292,6 +316,7 @@ int main(int argc, char* argv[]){
     // write(fd,argv[1],strlen(argv[1])+1);
 
     username = argv[1];
+    strcpy(username_global, username);
 
     if (strlen(username) >= MAX_USERNAME) {
         fprintf(stderr, "[CLIENTE] ERRO: Username demasiado longo (max %d)\n", MAX_USERNAME - 1);
@@ -315,9 +340,6 @@ int main(int argc, char* argv[]){
     }
 
     printf("[CLIENTE] FIFO privado criado: %s\n", private_fifo);
-
-
-    //signal(SIGPIPE, handler_pipe);
 
     // ABRIR FIFO DO CONTROLADOR
     // DEFINIDO NAS SETTINGS O NOME DO SERVIDOR
@@ -383,15 +405,15 @@ int main(int argc, char* argv[]){
 
     printf("\n");
     printf("LOGIN ACEITE\n");
-    printf("> Bem-vindo, %-40s ║\n", username);
+    printf("> Bem-vindo, %s\n", username);
     printf("  %s\n", resposta.msg);
     printf("\n");
 
     chave = resposta.chave;
     mostrar_ajuda();
 
-    pthread_t telemetria;
-    if(pthread_create(&telemetria, NULL, leituraControlador, &fd_privado) != 0){
+    pthread_t thread_telemetria;
+    if(pthread_create(&thread_telemetria, NULL, leituraControlador, &fd_privado) != 0){
         perror("[CONTROLADOR] Erro a criar a thread de leitura!");
         exit(1);
     }
@@ -400,14 +422,14 @@ int main(int argc, char* argv[]){
     int terminar = 0;
     while (!terminar && controlador_ativo) {
         memset(&pedido, 0, sizeof(pedido));
-
+        
         strncpy(pedido.username, username, MAX_USERNAME - 1);
         pedido.username[MAX_USERNAME - 1] = '\0';
         pedido.pid = getpid();
         strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
         pedido.fifo_name[MAX_MSG - 1] = '\0';
         pedido.chave = chave;
-
+        
         printf("\n%s > ", username);
         fflush(stdout);
         
@@ -431,6 +453,10 @@ int main(int argc, char* argv[]){
     }
     
     printf("\n\n[CLIENTE] A terminar...\n");
+    
+    pthread_cancel(thread_telemetria);
+    pthread_join(thread_telemetria, NULL);
+
     close(fd_privado);
     close(fd_controlador);
     unlink(private_fifo);

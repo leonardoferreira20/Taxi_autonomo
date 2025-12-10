@@ -1,25 +1,6 @@
 #include "Settings.h"
+
 int veiculo_running = 1;
-
-void percentagemBarra(char *dest, int percent) {
-    int blocos = percent / 10;   // 0 a 10
-    int pos = 0;
-
-    dest[pos++] = '[';
-
-    // blocos completos
-    for (int i = 0; i < blocos; i++)
-        dest[pos++] = '=';
-
-    if (blocos < 10) {
-        dest[pos++] = '>';
-        // restantes vazios
-        for (int i = blocos + 1; i < 10; i++)
-            dest[pos++] = '-';
-    }
-    dest[pos++] = ']';
-    dest[pos] = '\0';
-}
 
 void handler_signal(int sig, siginfo_t *siginfo, void *ctx) {
     (void)sig;
@@ -27,14 +8,15 @@ void handler_signal(int sig, siginfo_t *siginfo, void *ctx) {
     (void)ctx;
     veiculo_running = 0;
     if(sig == SIGUSR1) printf("\n[VEICULO] Sinal recebido, a terminar viagem...\n");
+    printf("\n[VEICULO] A interromper veiculo ....\n");
 }
 
 int main(int argc, char * argv[]) {
-    printf("%d",argc);
     if (argc != 5) {
         fprintf(stderr, "Uso: %s <id> <local> <distancia>\n", argv[0]);
         exit(1);
     }
+
     int id = atoi(argv[1]);
     char * local = argv[2];
     int distancia = atoi(argv[3]);
@@ -49,15 +31,12 @@ int main(int argc, char * argv[]) {
     sigaction(SIGUSR1, &sa, NULL);
     sigaction(SIGINT,  &sa, NULL);
 
-    // Contactar cliente
-    // Reportar início (write para controlador)
-    //printf("[VEICULO #%d] Cliente entrou. Iniciando viagem de %d km.\n", id, distancia);
-    //fflush(stdout);
-
     Telemetria tel;
     memset(&tel, 0, sizeof(tel));
 
-    sprintf(tel.msg, "[VEICULO #%d] Iniciando viagem de %d km.\n", id, distancia);
+    //sprintf(tel.msg, "[VEICULO #%d] Iniciando viagem de %d km.\n", id, distancia);
+    sprintf(tel.msg, "[VEICULO #%d] Chegou ao local de recolha.\n Cliente %s entrou no veiculo.\n Iniciando viagem de %d km.\n", id, username, distancia);
+
     tel.em_viagem = 1;
     tel.kms = 0;
     write(STDOUT_FILENO, &tel, sizeof(tel));
@@ -72,9 +51,9 @@ int main(int argc, char * argv[]) {
         float marco_km = distancia * (percent / 100.0);
 
         if ((float)count >= marco_km && percent <= 100) {
-            char barra[16];
-            percentagemBarra(barra, percent);
-            sprintf(tel.msg, "[VEICULO #%d] %s: %s %d%% concluida da viagem para o local %s.\n", id, username,barra, percent, local);
+            //char barra[16];
+            //percentagemBarra(barra, percent);
+            sprintf(tel.msg, "[VEICULO #%d] %s: %d%% concluida da viagem para o local %s.\n", id, username, /* barra, */ percent, local);
             tel.kms = marco_km;
             write(STDOUT_FILENO, &tel, sizeof(tel));
 
@@ -84,8 +63,15 @@ int main(int argc, char * argv[]) {
     }
 
     // Reportar fim
-
-    sprintf(tel.msg,"[VEICULO #%d] Viagem concluída! \n ->%d km\n ->%s", id, distancia, local);
+    if (veiculo_running) {
+        // Viagem concluída normalmente
+        sprintf(tel.msg, "[VEICULO #%d] Viagem concluida! %s chegou ao destino.\n Distancia percorrida: %d km\n Local: %s\n", id, username, distancia, local);
+        tel.kms = distancia;
+    } else {
+        // Viagem cancelada - apenas do controlador
+        sprintf(tel.msg, "[VEICULO #%d] Viagem cancelada aos %.0f km.\n Cliente: %s\n Destino: %s\n", id, tel.kms, username, local);
+    }
+    
     tel.em_viagem = 0;
     write(STDOUT_FILENO, &tel, sizeof(tel));
 

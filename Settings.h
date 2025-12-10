@@ -108,26 +108,26 @@ typedef struct {
 	int distancia;
 	int ativo;
 	int pagou;
-	int em_viagem;              // 1 se está em viagem, 0 caso contrário
+	int em_viagem;          // 1 se está em viagem, 0 caso contrário
 	int servicos_ativos;		// Indice do arry de servicos
 	Servico_Marcado servicos[MAX_SERVICES];      
 } Utilizador;
 
 typedef struct {
-    int ativo;                // 0 = livre, 1 = em uso
+	int ativo;                // 0 = livre, 1 = em uso
 
 	int nTaxi;
-    int indiceCliente;
-    int indiceServico;
+	int indiceCliente;
+	int indiceServico;
 
-    pid_t pid_veiculo;        // PID do processo veiculo (depois do fork)
+	pid_t pid_veiculo;        // PID do processo veiculo (depois do fork)
 
-    int fd_leitura;      // fd do lado de leitura do pipe anonimo
-
+	int fd_leitura;      // fd do lado de leitura do pipe anonimo
+	int horaFimServico;
 	char username[MAX_USERNAME];
-    char fifo_cliente[MAX_MSG];
-    char local[MAX_LOCAL];
-    int distancia;
+	char fifo_cliente[MAX_MSG];
+	char local[MAX_LOCAL];
+	int distancia;
 } Viagem;
 
 // COMANDOS - CLIENTE

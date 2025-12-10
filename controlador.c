@@ -1,4 +1,5 @@
 #include "Settings.h"
+
 int running = 1;
 int tempo = TEMPO_INICIAL;
 Utilizador utilizadores[MAXCLI];
@@ -58,7 +59,7 @@ int verficaClienteRegistado (char *user, int pid, int chave){
     return -1;
 }
 
-void adicionaUtilizador (char *user,  char * fifo_name, int pid){
+void adicionaUtilizador (char *user, char *fifo_name, int pid){
     strcpy(utilizadores[nClientes].username, user);
     strcpy(utilizadores[nClientes].fifo_name, fifo_name);
     utilizadores[nClientes].pid = pid;
@@ -72,7 +73,7 @@ void adicionaUtilizador (char *user,  char * fifo_name, int pid){
     nClientes++;
 }
 
-void eliminaUtilizador(char * user,int indice){
+void eliminaUtilizador(char *user, int indice){
     if (indice == -1) {
         printf("[CONTROLADOR] Falha ao tentar remover utilizador não registado: %s\n", user);
         return;
@@ -90,7 +91,9 @@ void eliminaUtilizador(char * user,int indice){
 
 int encontraServicoId(int id, int indiceCliente){
     for(int i = 0; i < utilizadores[indiceCliente].servicos_ativos; i++){
-        if(utilizadores[indiceCliente].servicos[i].id == id) return i;
+        if(utilizadores[indiceCliente].servicos[i].id == id){
+            return i;
+        }
     }
     return -1;
 }
@@ -110,7 +113,7 @@ void listarUtilizadores() {
         for ( int i = 0; i < nClientes; ++i ){
             char *estado;
 
-            if (utilizadores[i].em_viagem) {
+            if ( utilizadores[i].em_viagem == 1 ) {
                 estado = "EM VIAGEM";
             } else if (utilizadores[i].servicos_ativos > 0) {
                 estado = "À ESPERA";
@@ -148,7 +151,6 @@ void listarServicos() {
         
         for (int i = 0; i < nClientes; i++) {
             for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
-                // Determinar estado (por agora só AGENDADO, depois adicionar EM_EXECUCAO)        
                 printf("\n    %d  │ %s           │ %d   │ %s       │ %d │ %s      \n", utilizadores[i].servicos[j].id, utilizadores[i].servicos[j].username, utilizadores[i].servicos[j].hora, utilizadores[i].servicos[j].local, utilizadores[i].servicos[j].distancia, utilizadores[i].servicos[j].estado);
                 encontrou = 1;
             }
@@ -160,20 +162,51 @@ void listarServicos() {
     printf("-----------------------------------------------------------------------------\n");
 }
 
+void listarFrota(){
+    printf("\n------------------------------------------------------------\n");
+    printf("\n                    Estado da Frota                         \n");
+    printf("\n------------------------------------------------------------\n");
+
+    int ativos = 0;
+    int livres = 0;
+    int valueAmb = 0;
+
+    //IR BUSCAR A VARIAVEL DE AMBIENTE
+    const char *valueEnv = getenv(VARAMB);
+
+    //VERIFICAR O VALOR OU SE NAO EXISTE
+    if(valueEnv!= NULL){
+        valueAmb = atoi(valueEnv);
+        printf("VARAMB = %d\n", valueAmb);
+    }else {
+        printf("Variavel de ambiente nao encontrada!\n");
+    }
+
+    for (int i = 0; i < valueAmb; i++) {
+        if (viagens[i].ativo == 1) {
+            ativos++;
+            printf("\n  Veiculo #%d: EM VIAGEM (Cliente: %s, Local: %s)\n", i, viagens[i].username, viagens[i].local);
+        }
+    }
+    
+    livres = valueAmb - ativos;
+
+    printf("\n------------------------------------------------------------\n");
+    printf("\n  Veiculos ativos: %d/%d\n", ativos, valueAmb);
+    printf("  Veiculos livres: %d/%d\n", livres, valueAmb);
+    printf("\n------------------------------------------------------------\n");
+}
+
 void eliminaServico(int indice_Serv, int indiceCliente){
-    if (indice_Serv < 0 ||
-        indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
+    if (indice_Serv < 0 || indice_Serv >= utilizadores[indiceCliente].servicos_ativos) {
         return;
     }
 
     int idRemovido = utilizadores[indiceCliente].servicos[indice_Serv].id;
 
     // Shift à esquerda a partir do removido
-    for (int i = indice_Serv;
-         i < utilizadores[indiceCliente].servicos_ativos - 1;
-         i++) {
-        utilizadores[indiceCliente].servicos[i] =
-            utilizadores[indiceCliente].servicos[i+1];
+    for (int i = indice_Serv; i < utilizadores[indiceCliente].servicos_ativos - 1; i++) {
+        utilizadores[indiceCliente].servicos[i] = utilizadores[indiceCliente].servicos[i+1];
     }
 
     utilizadores[indiceCliente].servicos_ativos--;
@@ -212,6 +245,20 @@ void cancelarServicoAdmin(int id){
             //     kill(pid_veiculo, SIGUSR1);
             // }
             
+            int veiculo_idx = -1;
+            for(int k = 0; k < 30; k++) {
+                if(viagens[k].ativo && viagens[k].indiceCliente == i && viagens[k].indiceServico == indice) {
+                    veiculo_idx = k;
+                    break;
+                }
+            }
+            
+            if(veiculo_idx != -1) {
+                // Está em execução - matar veículo
+                kill(viagens[veiculo_idx].pid_veiculo, SIGUSR1);
+                printf("[CONTROLADOR] SIGUSR1 enviado ao veículo #%d\n", veiculo_idx);
+            }
+
             eliminaServico(indice, i);
             printf("[CONTROLADOR] ✓ Serviço #%d cancelado!\n\n", id);
             return;
@@ -221,12 +268,11 @@ void cancelarServicoAdmin(int id){
     printf("[CONTROLADOR] ✗ Serviço #%d não encontrado!\n\n", id);
 }
 
-
 void * gestor_comandos_controlador(void * arg){
     while(running){
         char comando [MAXCMD];
 
-        printf("Admin >");
+        printf("Admin > ");
         fflush(stdout);
         if (fgets(comando, sizeof(comando), stdin) == NULL) {
             break;
@@ -237,7 +283,7 @@ void * gestor_comandos_controlador(void * arg){
             printf("\n--------------------------------\n");
             printf("\n          Tempo Simulado        \n");
             printf("\n--------------------------------\n");
-            printf("\n  Tempo atual: %d segundos      \n ", tempo);
+            printf("\n  Tempo atual: %d horas      \n ", tempo);
             printf("\n--------------------------------\n");
         }
         else if (strcmp(comando, "km") == 0) {
@@ -253,7 +299,7 @@ void * gestor_comandos_controlador(void * arg){
         else if (strcmp(comando, "listar") == 0) {
             listarServicos();
         }
-        else if (strncmp(comando, "cancelar", 8) == 0) {
+        else if (strcmp(comando, "cancelar") == 0) {
             int id;
 
             if (sscanf(comando, "cancelar %d", &id) != 1) {
@@ -262,13 +308,13 @@ void * gestor_comandos_controlador(void * arg){
             } else {
                 cancelarServicoAdmin(id);
             }
-
         }
         else if (strcmp(comando, "frota") == 0) {
-            printf("[CONTROLADOR] (frota ainda nao implementada - falta veiculos)\n");
+            listarFrota();
         }
         else if (strcmp(comando, "terminar") == 0) {
             printf("[CONTROLADOR] Comando terminar recebido. A encerrar o sistema...\nCriar mensagem para acordar o controlador\n");
+
             Mensagem acorda;
             int fd_acorda = open(SERVERFIFO, O_WRONLY);
             if (fd_acorda == -1) {
@@ -281,6 +327,7 @@ void * gestor_comandos_controlador(void * arg){
                 }
                 close(fd_acorda);
             }
+
             running = 0;
         }
         else if (comando[0] != '\0') {
@@ -288,15 +335,14 @@ void * gestor_comandos_controlador(void * arg){
             printf("[CONTROLADOR] Comandos: utiliz, listar, frota, km, hora, cancelar <id>, terminar\n");
         }
     }
-    //raise(SIGINT); // força um sinal
+
     pthread_exit(NULL);
 }
 
 void * executaVeiculo (void * arg){
     //cast para array enviado na thread
-    Viagem *v = (Viagem *)arg;
+    Viagem *v_local = (Viagem *)arg;
     int viagem = 1;
-
     int fd_taxi[2];
     //Aqui tentamos criar o pipe anonimo e associar ao nosso fd_taxi
     //na posicao 0 fica a extremidade de leitura que nao vai ser usada
@@ -319,24 +365,23 @@ void * executaVeiculo (void * arg){
         close(fd_taxi[1]);
 
         //Preparacao das strings para o execl (apnas lê strings ou caracteres tipo terminal)
-        char idTaxi[16];                                     
-        char distancia[16];                                    
-        sprintf(idTaxi, "%d", v->nTaxi);    
-        sprintf(distancia,"%d", v->distancia);
+        char idTaxi[16];
+        char distancia[16];
+        sprintf(idTaxi, "%d", v_local->nTaxi);    
+        sprintf(distancia,"%d", v_local->distancia);
 
-
-        execl("./veiculo","veiculo", idTaxi, v->local,distancia,v->username,NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
+        execl("./veiculo","veiculo", idTaxi, v_local->local, distancia, v_local->username, NULL);//Aqui transformamos o filho num veiculo e nao estamos a passar argumemntos na linha de comando
     }else{
         //isto sera paa o controlador receber as mensagens dos veiculos
         close(fd_taxi[1]);
         Telemetria veiculo;
         Mensagem cliente;
         memset(&veiculo, 0, sizeof(veiculo));
-        memset(&cliente,0,sizeof(cliente));
+        memset(&cliente, 0, sizeof(cliente));
 
         float kmsAnterior = 0.0f;
         while(viagem){
-            int re = read(fd_taxi[0], &veiculo,sizeof (veiculo));
+            int re = read(fd_taxi[0], &veiculo, sizeof (veiculo));
             if (re <= 0) {
                 if (re == -1 && errno != EINTR) {
                     perror("[CONTROLADOR] Erro na leitura da telemetria!");
@@ -345,17 +390,14 @@ void * executaVeiculo (void * arg){
                 }
                 break;
             }
-            printf("\nmsg ->>>> %s\n", veiculo.msg);
-            printf("em viagem ->>>> %d\n",veiculo.em_viagem);
-            printf("kms ->>>> %.2f\n",veiculo.kms);
             
             cliente.tipo = MSG_VEICULO;
             strcpy(cliente.msg, veiculo.msg);
             cliente.telm.em_viagem = veiculo.em_viagem;
             cliente.telm.kms = veiculo.kms;
 
-            int fd_cliente = open(v->fifo_cliente, O_WRONLY);
-                if (fd_cliente == -1) {
+            int fd_cliente = open(v_local->fifo_cliente, O_WRONLY);
+            if (fd_cliente == -1) {
                 perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita da telemetria");
             } else {
                 if (write(fd_cliente, &cliente, sizeof(cliente)) == -1) {
@@ -375,13 +417,26 @@ void * executaVeiculo (void * arg){
                 viagem = 0;                                  
             }
         }
+
         //Rever esta parte na aula
-        close(fd_taxi[0]);                                     // NOVO
-        int status;                                            // NOVO
-        waitpid(pid, &status, 0);
         //O pai vai ler do veiculo na posicao 0 do fd_taxi
         //serao feitos reads na posicao 0 do fd taxi
+        close(fd_taxi[0]);
+        int status;
+        waitpid(pid, &status, 0);
+
+        // LIMPAR ESTADO DA VIAGEM E SERVICOS
+        viagens[v_local->nTaxi].ativo = 0;
+        nViagens--;
+
+        pthread_mutex_lock(&mutex_servicos);
+        eliminaServico(v_local->indiceServico, v_local->indiceCliente);
+        utilizadores[v_local->indiceCliente].em_viagem = 0;
+        pthread_mutex_unlock(&mutex_servicos);
+
+        printf("[CONTROLADOR] Veículo #%d libertado. Ativos: %d\n", v_local->nTaxi, nViagens);
     }
+
     return NULL;
 }
 
@@ -389,6 +444,7 @@ void * gestor_tempo(void * arg){
     memset(&viagens,0,sizeof(viagens));
     nViagens = 0;
     int valueAmb = 0;
+    pthread_t thread_veiculo;
 
     //IR BUSCAR A VARIAVEL DE AMBIENTE
     const char *valueEnv = getenv(VARAMB);
@@ -427,6 +483,7 @@ void * gestor_tempo(void * arg){
                             strcpy(viagens[indiceViagens].fifo_cliente,utilizadores[i].fifo_name);
                             strcpy(viagens[indiceViagens].local,utilizadores[i].servicos[j].local);
                             viagens[indiceViagens].distancia = utilizadores[i].servicos[j].distancia;
+                            viagens[indiceViagens].horaFimServico = utilizadores[i].servicos[j].hora + utilizadores[i].servicos[j].distancia; 
                             strcpy(utilizadores[i].servicos[j].estado, "Viagem");    
                             nViagens++;
 
@@ -434,7 +491,7 @@ void * gestor_tempo(void * arg){
                                    utilizadores[i].servicos[j].id,
                                    utilizadores[i].username);
                             
-                            pthread_t thread_veiculo;
+                            
                             if(pthread_create(&thread_veiculo, NULL, executaVeiculo, &viagens[indiceViagens]) != 0){
                                 perror("[CONTROLADOR] Erro a criar a thread de veiculo!");
                                 //Ver se da para fazer memset de um indice do array
@@ -450,7 +507,60 @@ void * gestor_tempo(void * arg){
         }
         sleep(TEMPOINSTANTE);
     }
+
+    pthread_cancel(thread_veiculo);
+    pthread_join(thread_veiculo, NULL);
+
     return NULL;
+}
+
+int existeServico(int h, Utilizador usr){
+    for ( int i = 0; i < usr.servicos_ativos; i++ ){
+        if ( (h >= usr.servicos[i].hora) && (h <= (usr.servicos[i].hora + usr.servicos[i].distancia + 1)) ){
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int existeCarroLivre(int hora, int distancia){
+    const char *valueEnv = getenv(VARAMB);
+    int maxVeiculos = 0;
+
+    if (valueEnv != NULL) {
+        maxVeiculos = atoi(valueEnv);
+    } else {
+        printf("[CONTROLADOR] Variavel de ambiente %s nao encontrada!\n", VARAMB);
+        return 0;
+    }
+
+    int inicioNovo = hora;
+    int fimNovo = hora + distancia;
+    int emUso = 0;
+
+    for (int i = 0; i < nClientes; i++) {
+        for (int j = 0; j < utilizadores[i].servicos_ativos; j++) {
+            Servico_Marcado *s = &utilizadores[i].servicos[j];
+
+            if (strcmp(s->estado, "Agendado") != 0 && strcmp(s->estado, "Viagem") != 0) {
+                continue;
+            }
+
+            int inicioExist = s->hora;
+            int fimExist = s->hora + s->distancia;
+
+            // há sobreposição de intervalos?
+            if (inicioExist < fimNovo && fimExist > inicioNovo) {
+                emUso++;
+                if (emUso >= maxVeiculos) {
+                    return 0;
+                }
+            }
+        }
+    }
+
+    return 1;
 }
 
 int main(int argc, char * argv[]){
@@ -486,7 +596,6 @@ int main(int argc, char * argv[]){
         exit(0);
     }
 
-    //signal(SIGINT, handler_sigint);
     if (mkfifo(SERVERFIFO, 0666) == -1) {
         if (errno != EEXIST) {
         perror("[CONTROLADOR] Erro na criacao do named pipe");
@@ -571,12 +680,9 @@ int main(int argc, char * argv[]){
                 resp.chave = utilizadores[indiceCliente].chave;
                 switch (pedido.tipo) {
                     case MSG_AGENDAR:
-                        printf("\n----> Funcao Agendar\n");
-
                         pthread_mutex_lock(&mutex_servicos);
 
-                        // Falta veiculo e disticao de servico marcado para seguir ou previsto
-                        if(nServicos<MAX_SERVICES && utilizadores[indiceCliente].servicos_ativos <MAX_SERVICES){
+                        if( existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, utilizadores[indiceCliente]) ){
                             resp.tipo = MSG_ACEITA;
                             int iServico = utilizadores[indiceCliente].servicos_ativos;
                             strcpy(utilizadores[indiceCliente].servicos[iServico].username,pedido.username);
@@ -616,9 +722,11 @@ int main(int argc, char * argv[]){
                                     utilizadores[indiceCliente].servicos[i].local,
                                     utilizadores[indiceCliente].servicos[i].distancia);
                             }
-                        printf("%s\n",resp.msg);
+                            strcpy(resp.veredito, "ACEITA");
+                            printf("%s\n",resp.msg);
                         }else{
                             resp.tipo = MSG_RECUSA;
+                            strcpy(resp.veredito, "RECUSA");
                             sprintf(resp.msg, "[CONTROLADOR] Utilizador %s nao tem nenhum Servico ativo neste momento!",pedido.username);
                             printf("%s\n",resp.msg);
                         }
@@ -694,12 +802,11 @@ int main(int argc, char * argv[]){
         }
     }
 
-
     printf("[CONTROLADOR] A encerrar...\n");
-    
+
     pthread_cancel(thread_tempo);
     pthread_join(thread_tempo, NULL);
-    pthread_cancel(thread_linha_comando); //Cancela a thread para sair do fgets se é bonito ou nao nao sei mas funciona!!!
+    pthread_cancel(thread_linha_comando);
     pthread_join(thread_linha_comando, NULL);
     
     //Encerrar os clientes no array de clientes - enviar mensagem a cada um deles
