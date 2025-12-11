@@ -246,7 +246,7 @@ void * leituraControlador(void * arg){
                     // TELEMETRIA DO VEÍCULO
                     printf("\n %s", controlador.msg);
                     if(controlador.telm.em_viagem == 0) {
-                        printf("[CLIENTE] ✓ Viagem concluída! Pode agendar novo serviço.\n");
+                        printf("[CLIENTE] ✓ Viagem concluída!\n");
                     }
                     break;
                 case MSG_ACEITA:

@@ -115,12 +115,14 @@ void listarUtilizadores() {
 
             if ( utilizadores[i].em_viagem == 1 ) {
                 estado = "EM VIAGEM";
-            } else if (utilizadores[i].servicos_ativos > 0) {
-                estado = "À ESPERA";
-            } else {
-                estado = "LIVRE";
+            } 
+            else {
+                if(utilizadores[i].servicos_ativos > 0){
+                    estado = "À ESPERA";
+                }else {
+                    estado = "LIVRE";
+                }
             }
-
             printf("\n    %d  | %s           | %d   | %s       | %d   \n", i + 1, utilizadores[i].username, utilizadores[i].pid, estado, utilizadores[i].servicos_ativos);
 
         }
@@ -169,23 +171,12 @@ void listarFrota(){
 
     int ativos = 0;
     int livres = 0;
-    int valueAmb = 0;
-
-    //IR BUSCAR A VARIAVEL DE AMBIENTE
-    const char *valueEnv = getenv(VARAMB);
-
-    //VERIFICAR O VALOR OU SE NAO EXISTE
-    if(valueEnv!= NULL){
-        valueAmb = atoi(valueEnv);
-        printf("VARAMB = %d\n", valueAmb);
-    }else {
-        printf("Variavel de ambiente nao encontrada!\n");
-    }
+    int valueAmb = atoi(getenv("NVEICULOS"));
 
     for (int i = 0; i < valueAmb; i++) {
         if (viagens[i].ativo == 1) {
             ativos++;
-            printf("\n  Veiculo #%d: EM VIAGEM (Cliente: %s, Local: %s)\n", i, viagens[i].username, viagens[i].local);
+            printf("\n  Veiculo #%d: EM VIAGEM %d%% (Cliente: %s, Local: %s)\n", i, viagens[i].percentagem, viagens[i].username, viagens[i].local);
         }
     }
     
@@ -216,6 +207,7 @@ void eliminaServico(int indice_Serv, int indiceCliente){
 }
 
 void cancelarServicoAdmin(int id){
+    int maxVeiculos = atoi(getenv("NVEICULOS"));
     if (id == 0) {
         // CANCELAR TODOS OS SERVIÇOS
         printf("[CONTROLADOR] A cancelar TODOS os serviços...\n");
@@ -227,8 +219,14 @@ void cancelarServicoAdmin(int id){
                 eliminaServico(0, i);
                 total_cancelados++;
             }
+
         }
-        
+        for (int i = 0; i < maxVeiculos; i++) {
+            if (viagens[i].ativo) {
+                kill(viagens[i].pid_veiculo, SIGUSR1);
+            }
+        }
+
         printf("[CONTROLADOR] ✓ %d serviços cancelados!\n\n", total_cancelados);
         return;
     }
@@ -236,31 +234,27 @@ void cancelarServicoAdmin(int id){
     // CANCELAR SERVIÇO ESPECIFICO
     for (int i = 0; i < nClientes; i++) {
         int indice = encontraServicoId(id, i);
+        printf("-> indice servico: %d\n",indice);
         if (indice != -1) {
             printf("[CONTROLADOR] Serviço #%d encontrado (cliente: %s)\n", 
                    id, utilizadores[i].username);
             
-            // TODO: Se estiver EM_EXECUCAO, enviar SIGUSR1 ao veículo
-            // if (servico em execução) {
-            //     kill(pid_veiculo, SIGUSR1);
-            // }
-            
             int veiculo_idx = -1;
-            for(int k = 0; k < 30; k++) {
+            for(int k = 0; k < maxVeiculos; k++) {
                 if(viagens[k].ativo && viagens[k].indiceCliente == i && viagens[k].indiceServico == indice) {
                     veiculo_idx = k;
                     break;
                 }
             }
-            
+            printf("->veicolo idx: %d",veiculo_idx);
             if(veiculo_idx != -1) {
                 // Está em execução - matar veículo
                 kill(viagens[veiculo_idx].pid_veiculo, SIGUSR1);
                 printf("[CONTROLADOR] SIGUSR1 enviado ao veículo #%d\n", veiculo_idx);
+            }else{
+                eliminaServico(indice, i);
+                printf("[CONTROLADOR] ✓ Serviço #%d cancelado!\n\n", id);
             }
-
-            eliminaServico(indice, i);
-            printf("[CONTROLADOR] ✓ Serviço #%d cancelado!\n\n", id);
             return;
         }
     }
@@ -277,7 +271,6 @@ void * gestor_comandos_controlador(void * arg){
         if (fgets(comando, sizeof(comando), stdin) == NULL) {
             break;
         }
-
         comando[strcspn(comando, "\n")] = '\0';
         if (strcmp(comando, "hora") == 0) {
             printf("\n--------------------------------\n");
@@ -299,7 +292,7 @@ void * gestor_comandos_controlador(void * arg){
         else if (strcmp(comando, "listar") == 0) {
             listarServicos();
         }
-        else if (strcmp(comando, "cancelar") == 0) {
+        else if (strncmp(comando, "cancelar",8) == 0) {
             int id;
             if (sscanf(comando, "cancelar %d", &id) != 1) {
                 printf("[CONTROLADOR] ✗ Uso: cancelar <id>\n");
@@ -376,6 +369,7 @@ void * executaVeiculo (void * arg){
         memset(&veiculo, 0, sizeof(veiculo));
         memset(&cliente, 0, sizeof(cliente));
 
+        viagens[v_local->nTaxi].pid_veiculo = pid;
         float kmsAnterior = 0.0f;
         while(viagem){
             int re = read(fd_taxi[0], &veiculo, sizeof (veiculo));
@@ -387,7 +381,7 @@ void * executaVeiculo (void * arg){
                 }
                 break;
             }
-            
+            v_local->percentagem = veiculo.percentagem;
             cliente.tipo = MSG_VEICULO;
             strcpy(cliente.msg, veiculo.msg);
             cliente.telm.em_viagem = veiculo.em_viagem;
@@ -440,19 +434,8 @@ void * executaVeiculo (void * arg){
 void * gestor_tempo(void * arg){
     memset(&viagens,0,sizeof(viagens));
     nViagens = 0;
-    int valueAmb = 0;
+    int valueAmb = atoi(getenv("NVEICULOS"));
     pthread_t thread_veiculo;
-
-    //IR BUSCAR A VARIAVEL DE AMBIENTE
-    const char *valueEnv = getenv(VARAMB);
-
-    //VERIFICAR O VALOR OU SE NAO EXISTE
-    if(valueEnv!= NULL){
-        valueAmb = atoi(valueEnv);
-        printf("VARAMB = %d\n", valueAmb);
-    }else {
-        printf("Variavel de ambiente nao encontrada!\n");
-    }
     
     while(running){
         ++tempo;
@@ -481,7 +464,8 @@ void * gestor_tempo(void * arg){
                             strcpy(viagens[indiceViagens].local,utilizadores[i].servicos[j].local);
                             viagens[indiceViagens].distancia = utilizadores[i].servicos[j].distancia;
                             viagens[indiceViagens].horaFimServico = utilizadores[i].servicos[j].hora + utilizadores[i].servicos[j].distancia; 
-                            strcpy(utilizadores[i].servicos[j].estado, "Viagem");    
+                            strcpy(utilizadores[i].servicos[j].estado, "Viagem");
+                            utilizadores[i].em_viagem = 1;    
                             nViagens++;
 
                             printf("[CONTROLADOR] Lançar veiculo para servico id=%d cliente=%s\n",
@@ -505,15 +489,21 @@ void * gestor_tempo(void * arg){
         sleep(TEMPOINSTANTE);
     }
 
-    pthread_cancel(thread_veiculo);
     pthread_join(thread_veiculo, NULL);
 
     return NULL;
 }
 
-int existeServico(int h, Utilizador usr){
-    for ( int i = 0; i < usr.servicos_ativos; i++ ){
-        if ( (h >= usr.servicos[i].hora) && (h <= (usr.servicos[i].hora + usr.servicos[i].distancia + 1)) ){
+int existeServico(int h, int distancia, Utilizador usr){
+    int inicioNovo = h;
+    int fimNovo    = h + distancia;
+
+    for (int i = 0; i < usr.servicos_ativos; i++) {
+        int inicioExist = usr.servicos[i].hora;
+        int fimExist    = usr.servicos[i].hora + usr.servicos[i].distancia;
+
+        // há sobreposição entre [inicioNovo, fimNovo) e [inicioExist, fimExist)?
+        if (inicioExist < fimNovo && fimExist > inicioNovo) {
             return 1;
         }
     }
@@ -522,15 +512,7 @@ int existeServico(int h, Utilizador usr){
 }
 
 int existeCarroLivre(int hora, int distancia){
-    const char *valueEnv = getenv(VARAMB);
-    int maxVeiculos = 0;
-
-    if (valueEnv != NULL) {
-        maxVeiculos = atoi(valueEnv);
-    } else {
-        printf("[CONTROLADOR] Variavel de ambiente %s nao encontrada!\n", VARAMB);
-        return 0;
-    }
+    int maxVeiculos = atoi(getenv("NVEICULOS"));
 
     int inicioNovo = hora;
     int fimNovo = hora + distancia;
@@ -566,18 +548,21 @@ int main(int argc, char * argv[]){
     int totalUtilizadoresLigados = 0;
     int totalUtilizadoresRejeitados = 0;
 
-    //DEFENIR VARIAVEL DE AMBIENTE EM STRING
-    if (setenv(VARAMB, "30", 1)!=0){
-        perror("setenv failed");
-        return 1;
+    const char *valueEnv = getenv(VARAMB);
+    if (valueEnv == NULL) {
+        fprintf(stderr, "[CONTROLADOR] Erro: variavel de ambiente %s nao definida!\n", VARAMB);
+        fprintf(stderr, "  Exemplo: export %s=3\n", VARAMB);
+        exit(EXIT_FAILURE);
     }
+
+    int maxVeiculos = atoi(getenv("NVEICULOS"));
 
     struct sigaction sa;
     sa.sa_handler = handler_sigint;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
+    sa.sa_flags = SA_SIGINFO;
     sigaction(SIGINT, &sa, NULL);
-
+    sigaction(SIGUSR1, &sa, NULL);
     // VERIFICA
     if (argc != 1){
         perror("[CONTROLADOR] Numero invalido de parametros!\n");
@@ -679,7 +664,7 @@ int main(int argc, char * argv[]){
                     case MSG_AGENDAR:
                         pthread_mutex_lock(&mutex_servicos);
 
-                        if( pedido.hora > tempo && existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, utilizadores[indiceCliente]) ){
+                        if( pedido.hora > tempo && existeCarroLivre(pedido.hora, pedido.distancia) && !existeServico(pedido.hora, pedido.distancia, utilizadores[indiceCliente]) ){
                             resp.tipo = MSG_ACEITA;
                             int iServico = utilizadores[indiceCliente].servicos_ativos;
                             strcpy(utilizadores[indiceCliente].servicos[iServico].username,pedido.username);
@@ -735,18 +720,20 @@ int main(int argc, char * argv[]){
                         int indice = encontraServicoId(pedido.servico_id, indiceCliente);
 
                         if (pedido.servico_id == 0) {
-                            while (utilizadores[indiceCliente].servicos_ativos > 0) {
-                                eliminaServico(0, indiceCliente);
+                            for(int i = 0; i < utilizadores[indiceCliente].servicos_ativos;i++){
+                                if(strcmp(utilizadores[indiceCliente].servicos[i].estado,"Viagem") != 0){
+                                    eliminaServico(i, indiceCliente);
+                                }
                             }
-                            strcpy(resp.msg, "[CONTROLADOR] Todos os servicos do utilizador apagados!");
+                            strcpy(resp.msg, "[CONTROLADOR] Todos os servicos agendados do utilizador foram apagados!");
                             resp.tipo = MSG_ACEITA;
                         } else {
-                            if (indice != -1) {
+                            if (indice != -1 && strcmp(utilizadores[indiceCliente].servicos[indice].estado,"Viagem") != 0) {
                                 eliminaServico(indice, indiceCliente);
                                 resp.tipo = MSG_ACEITA;
                                 sprintf(resp.msg,
-                                        "[CONTROLADOR] Servico com id: %d cancelado",
-                                        pedido.servico_id);
+                                    "[CONTROLADOR] Servico com id: %d cancelado",
+                                    pedido.servico_id);
                             } else {
                                 resp.tipo = MSG_RECUSA;
                                 sprintf(resp.msg,
@@ -801,9 +788,13 @@ int main(int argc, char * argv[]){
 
     printf("[CONTROLADOR] A encerrar...\n");
 
-    pthread_cancel(thread_tempo);
+    for (int i = 0; i < maxVeiculos; i++) {
+        if (viagens[i].ativo) {
+        kill(viagens[i].pid_veiculo, SIGUSR1);
+        }
+    }
     pthread_join(thread_tempo, NULL);
-    pthread_cancel(thread_linha_comando);
+    pthread_kill(thread_linha_comando, SIGUSR1);
     pthread_join(thread_linha_comando, NULL);
     
     //Encerrar os clientes no array de clientes - enviar mensagem a cada um deles

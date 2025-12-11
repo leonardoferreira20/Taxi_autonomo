@@ -21,7 +21,7 @@
 #define MAX_SERVICES 30
 #define TEMPOINSTANTE 5
 
-#define VARAMB "NVEICULO"
+#define VARAMB "NVEICULOS"
 
 #define MAX_USERNAME 50
 #define MAX_LOCAL 100
@@ -31,7 +31,7 @@
 #define SERVERFIFO "fifo_server"
 #define CLIENTE_FIFO_PREFIX "cli_"
 #define VEICULOFIFO "veiculo"
-#define TEMPO_INICIAL 1
+#define TEMPO_INICIAL 0
 
 typedef enum {
 	MSG_LIMPA = 0,
@@ -42,8 +42,8 @@ typedef enum {
 	MSG_RESPOSTA = 5,
 	MSG_TERMINAR = 6,
 	MSG_NOTIFICACAO = 7,
-	MSG_ACEITA = 8, //
-	MSG_RECUSA = 9, //
+	MSG_ACEITA = 8, 
+	MSG_RECUSA = 9, 
 	MSG_NAOAUTENTICADO = 10,
 	MSG_VEICULO = 11,
 	MSG_ADMINSHUTDOWN = 12
@@ -53,6 +53,7 @@ typedef struct {
 	char msg[MAX_MSG];
 	int em_viagem; //1 em viagem e 0 acaba
 	float kms;
+	int percentagem;
 } Telemetria;
 
 // AUTENTICAÇÃO
@@ -125,6 +126,7 @@ typedef struct {
 	char fifo_cliente[MAX_MSG];
 	char local[MAX_LOCAL];
 	int distancia;
+	int percentagem;
 } Viagem;
 
 // COMANDOS - CLIENTE
