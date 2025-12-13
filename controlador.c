@@ -648,7 +648,7 @@ int main(int argc, char * argv[]){
             // --- LÓGICA DE LOGIN ---
             resp.tipo = MSG_RECUSA; // por omissão
             if (nClientes < MAXCLI && usernameLogado(pedido.username) == 0) {
-                printf("[CONTROLADOR] Cliente aceite! Username: %s\n", pedido.username);
+                printf("\n[CONTROLADOR] Cliente aceite! Username: %s\n", pedido.username);
                 adicionaUtilizador(pedido.username, pedido.fifo_name, pedido.pid);
                 resp.chave=utilizadores[nClientes-1].chave;
 
@@ -730,11 +730,12 @@ int main(int argc, char * argv[]){
 
                         break;
                     case MSG_CANCELAR:
+                        pthread_mutex_lock(&mutex_servicos);
                         int indice = encontraServicoId(pedido.servico_id, indiceCliente);
 
                         if (pedido.servico_id == 0) {
-                            for(int i = 0; i < utilizadores[indiceCliente].servicos_ativos;i++){
-                                if(strcmp(utilizadores[indiceCliente].servicos[i].estado,"Viagem") != 0){
+                            for (int i = utilizadores[indiceCliente].servicos_ativos - 1; i >= 0; i--) {
+                                if (strcmp(utilizadores[indiceCliente].servicos[i].estado, "Viagem") != 0) {
                                     eliminaServico(i, indiceCliente);
                                 }
                             }
@@ -754,42 +755,93 @@ int main(int argc, char * argv[]){
                                         pedido.servico_id);
                             }
                         }
+                        pthread_mutex_unlock(&mutex_servicos);
                         printf("%s\n", resp.msg);
                         break;
-                    case MSG_TERMINAR:
+                    case MSG_TERMINAR: {
                         pthread_mutex_lock(&mutex_servicos);
                         resp.tipo = MSG_TERMINAR;
+
                         if (utilizadores[indiceCliente].em_viagem == 1) {
+                            int contador = 0;
+
                             strcpy(resp.veredito, "RECUSA");
-                            strcpy(resp.msg, "[CONTROLADOR] Nao pode terminar: esta em viagem.");
+                            strcpy(resp.msg,
+                                "[CONTROLADOR] Nao pode terminar: nao te lembres de sair a meio da viagem!\n");
+
+                            for (int i = utilizadores[indiceCliente].servicos_ativos - 1; i >= 0; i--) {
+                                if (strcmp(utilizadores[indiceCliente].servicos[i].estado, "Viagem") != 0) {
+                                    eliminaServico(i, indiceCliente);
+                                    contador++;
+                                }
+                            }
+
+                            utilizadores[indiceCliente].chato++;
+
+                            if (contador > 0) {
+                                sprintf(resp.msg,
+                                        "[CONTROLADOR] Nao pode terminar: nao te lembres de sair a meio da viagem!\n"
+                                        "[CONTROLADOR] Verificar servicos agendados...\n"
+                                        "[CONTROLADOR] Cancelados %d servicos agendados.\n",
+                                        contador);
+                            } else {
+                                int c = utilizadores[indiceCliente].chato;
+
+                                if (c == 2) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Outra vez? Nao te cansas!\n[CONTROLADOR] Estamos perante um Deadlock entre ti e o bom senso!\n[CONTROLADOR] Pedido #%d recusado.\n", c);
+                                } else if (c == 3) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Abrir a porta em andamento nao esta no plano de seguros.\nPedido #%d recusado.\n", c);
+                                } else if (c == 5) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Ok... Isto ja nao e insistencia. E dedicacao!Pedido #%d recusado.\n", c);
+                                } else if (c == 6) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Btw... temos uma ponte daqui a 2 km podes ter mais sorte!\nPedido #%d recusado.\n", c);
+                                } else if (c == 7) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] woooo...Tenho a coca-cola muito perto do controlo da porta!\nPedido #%d recusado.\n", c);
+                                } else if (c == 8) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Isso querias tu!Paga primeiro!\nPedido #%d recusado.\n", c);
+                                } else if (c == 9) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Estive a ver no regulamento embora nao tenha seguro de saude \nDescobri que tens uma clausula aos 40 pedidos de terminar que te pode interessar!\nPedido #%d recusado.\n", c);
+                                } else if (c == 40) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Por acaso estava curioso para ver se chegavas aqui!\nFalando agora a serio a porta abre na tentativa 9000!\nPedido #%d recusado.\n", c);
+                                } else if (c > 40 && c < 9000) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] Nao pode terminar: nao te lembres de sair a meio da viagem!\n"
+                                            "whisper (faltam apenas %d)\n",
+                                            9000 - c);
+
+                                } else if (c >= 9000) {
+                                    sprintf(resp.msg,
+                                            "[CONTROLADOR] ITS OVER 9000!!!\n"
+                                            "Mais precisamente %d pedidos de terminar recusados!\n", c);
+                                }
+                            }
+
                             pthread_mutex_unlock(&mutex_servicos);
                             break;
                         }
 
-                        // Cancelar todos os serviços agendados (não mexer nos que estejam em "Viagem")
+                        /* ---- caso ACEITA (nao esta em viagem) ---- */
                         for (int i = utilizadores[indiceCliente].servicos_ativos - 1; i >= 0; i--) {
                             if (strcmp(utilizadores[indiceCliente].servicos[i].estado, "Viagem") != 0) {
                                 eliminaServico(i, indiceCliente);
                             }
                         }
 
-                        /*
-                        // Se tiveres pagamento real, valida aqui:
-                        if (utilizadores[indiceCliente].pagou == 0) {
-                            strcpy(resp.veredito, "RECUSA");
-                            strcpy(resp.msg, "[CONTROLADOR] Nao pode terminar: pagamento em falta.");
-                            pthread_mutex_unlock(&mutex_servicos);
-                            break;
-                        }
-                        */
-                        
-                        // Agora já não tem viagem e já cancelaste agendados
                         eliminaUtilizador(pedido.username, indiceCliente);
                         strcpy(resp.veredito, "ACEITA");
                         strcpy(resp.msg, "[CONTROLADOR] Espero que tenha gostado! Volte sempre!");
 
                         pthread_mutex_unlock(&mutex_servicos);
                         break;
+                    }
                     case MSG_CLIENTESHUTDOWN:
                         pthread_mutex_lock(&mutex_servicos);
                         for (int i = utilizadores[indiceCliente].servicos_ativos - 1; i >= 0; i--){
@@ -820,6 +872,7 @@ int main(int argc, char * argv[]){
         }
         close(fd_cliente);
         }
+        printf("Admin > ");
     }
 
     printf("[CONTROLADOR] A encerrar...\n");

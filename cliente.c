@@ -95,6 +95,10 @@ ComandoParsed parsear_comando(const char *linha) {
         // consultar (sem argumentos)
         cmd.valido = 1;
         
+    } else if (strcmp(cmd.comando, "ajuda") == 0) {
+        // consultar (sem argumentos)
+        cmd.valido = 1;
+        
     } else if (strcmp(cmd.comando, "cancelar") == 0) {
         // cancelar <id>
         
@@ -123,12 +127,30 @@ ComandoParsed parsear_comando(const char *linha) {
 
 // HANDLER PARA DETETAR MORTE DO CONTROLADOR (SIGPIPE)
 void handler_pipe(int sig, siginfo_t *siginfo, void *ctx) {
-    (void)sig;
-    if (sig == SIGINT) forcado = 1;
+    (void)siginfo;
+    (void)ctx;
+
+    if (sig == SIGUSR1) {
+        printf("\n[CLIENTE] Terminacao forcada pelo servidor.\n");
+    } else if (sig == SIGINT) {
+        printf("\n[CLIENTE] Terminacao forcada (CTRL+C).\n");
+        forcado = 1;
+    } else if (sig == SIGPIPE) {
+        printf("\n[CLIENTE] Ligacao ao servidor perdida (SIGPIPE).\n");
+    }
+
     controlador_ativo = 0;
-    if(sig == SIGUSR1) printf("\n[CONTROLADOR]O Controlador terminou. Termino forcado do Sistema!\n");
-    printf("\n[CLIENTE] A interromper cliente ....\n");
+    terminar = 1;
+
+    /* acordar o fgets caso esteja bloqueado */
+    kill(getpid(), SIGUSR2);
 }
+
+void handler_terminar(int sig) {
+    //apenas para fazer break no fgets
+    (void)sig;
+}
+
 
 // MOSTRAR MENU DE COMANDOS
 void mostrar_ajuda() {
@@ -138,6 +160,7 @@ void mostrar_ajuda() {
     printf("\t> agendar <hora> <local> <distancia>\n");
     printf("\t> consultar\n");
     printf("\t> cancelar <id>     (0 = cancelar todos)\n");
+    printf("\t> ajuda\n");
     printf("\t> terminar");
     printf("\n-------------------------------------------------------\n");
 }
@@ -210,6 +233,9 @@ int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, co
     } else if (strcmp(cmd->comando, "consultar") == 0) {
         return enviar_consultar(fd_controlador, fd_privado, username, pedido);
         
+    } else if (strcmp(cmd->comando, "ajuda") == 0) {
+        mostrar_ajuda();
+        
     } else if (strcmp(cmd->comando, "cancelar") == 0) {
         return enviar_cancelar(fd_controlador, fd_privado, username,pedido, cmd->id);
         
@@ -228,7 +254,6 @@ int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, co
 void * leituraControlador(void * arg){
     int* p = (int*) arg;
     int fd_privado = *p;
-
     Mensagem controlador;
     memset(&controlador,0,sizeof(controlador));
 
@@ -251,6 +276,7 @@ void * leituraControlador(void * arg){
                     if(controlador.telm.em_viagem == 0) {
                         printf("[CLIENTE] ✓ Viagem concluída!\n");
                     }
+
                     break;
                 case MSG_ACEITA:
                     printf("\n %s\n", controlador.msg);
@@ -260,10 +286,10 @@ void * leituraControlador(void * arg){
                     break;
                 case MSG_TERMINAR:
                     printf("\n %s\n", controlador.msg);
-                    if(strcmp(controlador.veredito, "ACEITA")==0){
-                        printf("aceitou\n");
+                    if (strcmp(controlador.veredito, "ACEITA") == 0) {
                         controlador_ativo = 0;
-                    }else printf("rejeitou\n");
+                        kill(getpid(), SIGUSR2);
+                    }
                     break;
                 case MSG_CONSULTAR:
                     if(strcmp(controlador.veredito, "ACEITA")==0){
@@ -282,7 +308,7 @@ void * leituraControlador(void * arg){
     }
 
     if(controlador_ativo) {
-        printf("\n%s > ", username_global);
+        printf("%s > ", username_global);
         //fflush(stdout);
     }
 }
@@ -298,22 +324,29 @@ int main(int argc, char* argv[]){
     memset(&pedido, 0, sizeof(pedido));
     memset(&resposta, 0, sizeof(resposta));
     
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_sigaction = handler_pipe;
-    sa.sa_flags = SA_SIGINFO;
-    sigemptyset(&sa.sa_mask);
+    struct sigaction sa_pipe;
+    memset(&sa_pipe, 0, sizeof(sa_pipe));
+    sa_pipe.sa_sigaction = handler_pipe;
+    sa_pipe.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa_pipe.sa_mask);
 
-    sigaction(SIGUSR1, &sa, NULL);
-    sigaction(SIGINT,  &sa, NULL);
+    sigaction(SIGPIPE, &sa_pipe, NULL);   // ✅ controlador morreu / pipe partido
+    sigaction(SIGINT,  &sa_pipe, NULL);
+    sigaction(SIGUSR1, &sa_pipe, NULL);
+
+    struct sigaction sa_term;
+    memset(&sa_term, 0, sizeof(sa_term));
+    sa_term.sa_handler = handler_terminar;
+    sa_term.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa_term.sa_mask);
+
+    sigaction(SIGUSR2, &sa_term, NULL);
 
     // VERIFICACAO DE NUMERO DE ARGUMENTOS
     if (argc != 2){
         perror("Numero invalido de parametros!\n");
         exit(1);
     }
-
-    printf("[CLIENTE] Controlador detetado.\n");
 
     // ATRIBUIR NOME DO UTILIZADOR E VALIDAR SE ULTRAPASSA O MÁXIMO DEFINIDO 
     // Escrita para o servidor autenticacao
@@ -337,6 +370,8 @@ int main(int argc, char* argv[]){
         exit(1);
     }
     
+    printf("[CLIENTE] Controlador detetado.\n");
+
     // CRIAR FIFO PRIVADO PARA O CLIENTE
     snprintf(private_fifo, sizeof(private_fifo), "%s%s_%d", CLIENTE_FIFO_PREFIX, username, getpid());
        
@@ -446,11 +481,8 @@ int main(int argc, char* argv[]){
         if (!cmd.valido) {
             continue;
         }
-        
         if (strcmp(cmd.comando, "terminar") == 0) {
-            if (processar_comando(&cmd, fd_controlador, fd_privado, username, &pedido) == 0) {
-                terminar = 1;
-            }
+            processar_comando(&cmd, fd_controlador, fd_privado, username, &pedido);
         } else {
             processar_comando(&cmd, fd_controlador, fd_privado, username, &pedido);
         }
@@ -475,8 +507,6 @@ int main(int argc, char* argv[]){
 
     }
     
-    //pthread_kill(thread_telemetria, SIGUSR1);
-    pthread_cancel(thread_telemetria);
     pthread_join(thread_telemetria, NULL);
 
     close(fd_privado);

@@ -108,6 +108,7 @@ typedef struct {
 	int ativo;
 	//int pagou;
 	int em_viagem;          // 1 se está em viagem, 0 caso contrário
+	int chato;
 	int servicos_ativos;		// Indice do arry de servicos
 	Servico_Marcado servicos[MAX_SERVICES];      
 } Utilizador;

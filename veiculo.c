@@ -14,6 +14,8 @@ void handler_signal(int sig, siginfo_t *siginfo, void *ctx) {
 }
 
 int main(int argc, char * argv[]) {
+    setbuf(stdout, NULL);
+
     if (argc != 5) {
         fprintf(stderr, "Uso: %s <id> <local> <distancia> <username>\n", argv[0]);
         exit(1);
