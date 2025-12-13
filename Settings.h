@@ -16,7 +16,7 @@
 
 // CONSTANTES
 #define MAXCMD 256
-#define MAXCLI 30
+#define MAXCLI 2
 #define MAX_VEHICLES 10
 #define MAX_SERVICES 30
 #define TEMPOINSTANTE 5
@@ -46,7 +46,8 @@ typedef enum {
 	MSG_RECUSA = 9, 
 	MSG_NAOAUTENTICADO = 10,
 	MSG_VEICULO = 11,
-	MSG_ADMINSHUTDOWN = 12
+	MSG_ADMINSHUTDOWN = 12,
+	MSG_CLIENTESHUTDOWN =13
 } TipoMensagem;
 
 typedef struct {
@@ -105,7 +106,7 @@ typedef struct {
 	int pid;
 	int distancia;
 	int ativo;
-	int pagou;
+	//int pagou;
 	int em_viagem;          // 1 se está em viagem, 0 caso contrário
 	int servicos_ativos;		// Indice do arry de servicos
 	Servico_Marcado servicos[MAX_SERVICES];      

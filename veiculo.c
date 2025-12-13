@@ -37,7 +37,7 @@ int main(int argc, char * argv[]) {
     memset(&tel, 0, sizeof(tel));
 
     //sprintf(tel.msg, "[VEICULO #%d] Iniciando viagem de %d km.\n", id, distancia);
-    sprintf(tel.msg, "[VEICULO #%d] Chegou ao local de recolha.\n Cliente %s entrou no veiculo.\n Iniciando viagem de %d km.\n", id, username, distancia);
+    sprintf(tel.msg, "[VEICULO #%d] Chegou ao local de recolha.\n Cliente %s entrou no veiculo.\n Iniciando viagem de %d km.\n", id+1, username, distancia);
 
     tel.em_viagem = 1;
     tel.kms = 0;
@@ -53,7 +53,7 @@ int main(int argc, char * argv[]) {
         float marco_km = distancia * (percent / 100.0);
 
         if ((float)count >= marco_km && percent <= 100) {
-            sprintf(tel.msg, "[VEICULO #%d] %s: %d%% concluida da viagem para o local %s.\n", id, username, percent, local);
+            sprintf(tel.msg, "[VEICULO #%d] %s: %d%% concluida da viagem para o local %s.\n", id+1, username, percent, local);
             tel.kms = marco_km;
             tel.percentagem = percent;
             write(STDOUT_FILENO, &tel, sizeof(tel));
@@ -66,11 +66,11 @@ int main(int argc, char * argv[]) {
     // Reportar fim
     if (veiculo_running) {
         // Viagem concluída normalmente
-        sprintf(tel.msg, "[VEICULO #%d] Viagem concluida! %s chegou ao destino.\n Distancia percorrida: %d km\n Local: %s\n", id, username, distancia, local);
+        sprintf(tel.msg, "[VEICULO #%d] Viagem concluida! %s chegou ao destino.\n Distancia percorrida: %d km\n Local: %s\n", id+1, username, distancia, local);
         tel.kms = distancia;
     } else {
         // Viagem cancelada - apenas do controlador
-        sprintf(tel.msg, "[VEICULO #%d] Viagem cancelada aos %.0f km.\n Cliente: %s\n Destino: %s\n", id, tel.kms, username, local);
+        sprintf(tel.msg, "[VEICULO #%d] Viagem cancelada aos %.0f km.\n Cliente: %s\n Destino: %s\n", id+1, tel.kms, username, local);
     }
     
     tel.em_viagem = 0;

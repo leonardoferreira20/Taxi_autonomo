@@ -4,7 +4,7 @@ int running = 1;
 int tempo = TEMPO_INICIAL;
 Utilizador utilizadores[MAXCLI];
 Servico_Marcado marcados[MAX_SERVICES];
-Viagem viagens[30];
+Viagem viagens[30]; //VAR AMBIENTE AQUI
 int nViagens;
 int nServicos = 0;
 int nClientes = 0;
@@ -32,6 +32,9 @@ void imprimirTipoDePedido(TipoMensagem tipo){
         break;
         case MSG_TERMINAR:
             printf("[CONTROLADOR] Pedido do tipo Terminar\n");
+        break;
+        case MSG_CLIENTESHUTDOWN:
+            printf("[CONTROLADOR] Aviso de shutdown de Cliente\n");
         break;
         default: 
             printf("[CONTROLADOR] Comando Inválido\n");
@@ -65,8 +68,6 @@ void adicionaUtilizador (char *user, char *fifo_name, int pid){
     utilizadores[nClientes].pid = pid;
     utilizadores[nClientes].chave = tempo;
     utilizadores[nClientes].distancia = 0;
-    utilizadores[nClientes].ativo = 1;
-    utilizadores[nClientes].pagou = 1;
     utilizadores[nClientes].em_viagem = 0;
     utilizadores[nClientes].servicos_ativos = 0;
 
@@ -176,7 +177,7 @@ void listarFrota(){
     for (int i = 0; i < valueAmb; i++) {
         if (viagens[i].ativo == 1) {
             ativos++;
-            printf("\n  Veiculo #%d: EM VIAGEM %d%% (Cliente: %s, Local: %s)\n", i, viagens[i].percentagem, viagens[i].username, viagens[i].local);
+            printf("\n  Veiculo #%d: EM VIAGEM %d%% (Cliente: %s, Local: %s)\n", i+1, viagens[i].percentagem, viagens[i].username, viagens[i].local);
         }
     }
     
@@ -234,7 +235,6 @@ void cancelarServicoAdmin(int id){
     // CANCELAR SERVIÇO ESPECIFICO
     for (int i = 0; i < nClientes; i++) {
         int indice = encontraServicoId(id, i);
-        printf("-> indice servico: %d\n",indice);
         if (indice != -1) {
             printf("[CONTROLADOR] Serviço #%d encontrado (cliente: %s)\n", 
                    id, utilizadores[i].username);
@@ -246,11 +246,11 @@ void cancelarServicoAdmin(int id){
                     break;
                 }
             }
-            printf("->veicolo idx: %d",veiculo_idx);
+
             if(veiculo_idx != -1) {
                 // Está em execução - matar veículo
                 kill(viagens[veiculo_idx].pid_veiculo, SIGUSR1);
-                printf("[CONTROLADOR] SIGUSR1 enviado ao veículo #%d\n", veiculo_idx);
+                printf("[CONTROLADOR] SIGUSR1 enviado ao veículo #%d\n", veiculo_idx+1);
             }else{
                 eliminaServico(indice, i);
                 printf("[CONTROLADOR] ✓ Serviço #%d cancelado!\n\n", id);
@@ -418,6 +418,7 @@ void * executaVeiculo (void * arg){
 
         // LIMPAR ESTADO DA VIAGEM E SERVICOS
         viagens[v_local->nTaxi].ativo = 0;
+        viagens[v_local->nTaxi].pid_veiculo = -1;
         nViagens--;
 
         pthread_mutex_lock(&mutex_servicos);
@@ -437,8 +438,20 @@ void * gestor_tempo(void * arg){
     int valueAmb = atoi(getenv("NVEICULOS"));
     pthread_t thread_veiculo;
     
+    //Possivel pinng;
+    //int contador = 0;
     while(running){
         ++tempo;
+        //++contador;
+        /*
+        if(contador%10 == 0 && nClientes>0){
+            for(int i = 0; i<utilizadores[i];++i){
+
+
+            }
+        }
+        */
+
         if(nViagens < valueAmb){
             pthread_mutex_lock(&mutex_servicos);
             for (int i = 0; i < nClientes; i++) {
@@ -744,25 +757,46 @@ int main(int argc, char * argv[]){
                         printf("%s\n", resp.msg);
                         break;
                     case MSG_TERMINAR:
-                        resp.tipo = MSG_TERMINAR;
-
                         pthread_mutex_lock(&mutex_servicos);
-
-                        if (utilizadores[indiceCliente].pagou == 1 &&
-                            utilizadores[indiceCliente].em_viagem == 0 &&
-                            utilizadores[indiceCliente].servicos_ativos == 0) {
-                            
-                            eliminaUtilizador(pedido.username,indiceCliente);
-                            strcpy(resp.msg, "[CONTROLADOR] Espero que tenha gostado dos nossos servicos! Volte sempre!");
-                            
-                            resp.tipo = MSG_ACEITA;
-                        } else {
-                            strcpy(resp.msg, "[CONTROLADOR] Não pode terminar agora (serviço ativo ou pagamento em falta).");
-                            resp.tipo = MSG_RECUSA;
+                        resp.tipo = MSG_TERMINAR;
+                        if (utilizadores[indiceCliente].em_viagem == 1) {
+                            strcpy(resp.veredito, "RECUSA");
+                            strcpy(resp.msg, "[CONTROLADOR] Nao pode terminar: esta em viagem.");
+                            pthread_mutex_unlock(&mutex_servicos);
+                            break;
                         }
 
-                        pthread_mutex_unlock(&mutex_servicos);
+                        // Cancelar todos os serviços agendados (não mexer nos que estejam em "Viagem")
+                        for (int i = utilizadores[indiceCliente].servicos_ativos - 1; i >= 0; i--) {
+                            if (strcmp(utilizadores[indiceCliente].servicos[i].estado, "Viagem") != 0) {
+                                eliminaServico(i, indiceCliente);
+                            }
+                        }
+
+                        /*
+                        // Se tiveres pagamento real, valida aqui:
+                        if (utilizadores[indiceCliente].pagou == 0) {
+                            strcpy(resp.veredito, "RECUSA");
+                            strcpy(resp.msg, "[CONTROLADOR] Nao pode terminar: pagamento em falta.");
+                            pthread_mutex_unlock(&mutex_servicos);
+                            break;
+                        }
+                        */
                         
+                        // Agora já não tem viagem e já cancelaste agendados
+                        eliminaUtilizador(pedido.username, indiceCliente);
+                        strcpy(resp.veredito, "ACEITA");
+                        strcpy(resp.msg, "[CONTROLADOR] Espero que tenha gostado! Volte sempre!");
+
+                        pthread_mutex_unlock(&mutex_servicos);
+                        break;
+                    case MSG_CLIENTESHUTDOWN:
+                        pthread_mutex_lock(&mutex_servicos);
+                        for (int i = utilizadores[indiceCliente].servicos_ativos - 1; i >= 0; i--){
+                            cancelarServicoAdmin(utilizadores[indiceCliente].servicos[i].id);
+                        }
+                        eliminaUtilizador(pedido.username, indiceCliente);
+                        pthread_mutex_unlock(&mutex_servicos);
                         break;
                     default:
                         printf("\n ----> Comando inválido!\n");
@@ -774,7 +808,8 @@ int main(int argc, char * argv[]){
         
         // --- "ÚNICO WRITE" (este write serve para mensagem): enviar resposta ao FIFO do cliente ---
         //           pode existir mais writes mas sao no switch com continue (ex consultar)
-        int fd_cliente = open(pedido.fifo_name, O_WRONLY);
+        if(pedido.tipo != MSG_CLIENTESHUTDOWN){
+            int fd_cliente = open(pedido.fifo_name, O_WRONLY);
         if (fd_cliente == -1) {
             perror("[CONTROLADOR] Erro na abertura do named pipe do cliente para escrita");
             // não conseguimos responder, mas não rebentamos o servidor
@@ -782,7 +817,8 @@ int main(int argc, char * argv[]){
             if (write(fd_cliente, &resp, sizeof(resp)) == -1) {
                 perror("[CONTROLADOR] Erro ao enviar resposta ao cliente");
             }
-            close(fd_cliente);
+        }
+        close(fd_cliente);
         }
     }
 
@@ -790,7 +826,10 @@ int main(int argc, char * argv[]){
 
     for (int i = 0; i < maxVeiculos; i++) {
         if (viagens[i].ativo) {
-        kill(viagens[i].pid_veiculo, SIGUSR1);
+            if(viagens[i].pid_veiculo != -1){
+                printf("[Controlador] Enviado sinal para carro com pid %d\n", viagens[i].pid_veiculo);
+                kill(viagens[i].pid_veiculo, SIGUSR1);
+            }
         }
     }
     pthread_join(thread_tempo, NULL);

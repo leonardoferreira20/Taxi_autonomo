@@ -11,6 +11,8 @@
 #include <errno.h>
 
 int controlador_ativo = 1;
+int terminar = 0;
+int forcado = 0;
 char username_global[MAX_USERNAME];
 
 // ALTERAR
@@ -122,6 +124,7 @@ ComandoParsed parsear_comando(const char *linha) {
 // HANDLER PARA DETETAR MORTE DO CONTROLADOR (SIGPIPE)
 void handler_pipe(int sig, siginfo_t *siginfo, void *ctx) {
     (void)sig;
+    if (sig == SIGINT) forcado = 1;
     controlador_ativo = 0;
     if(sig == SIGUSR1) printf("\n[CONTROLADOR]O Controlador terminou. Termino forcado do Sistema!\n");
     printf("\n[CLIENTE] A interromper cliente ....\n");
@@ -256,8 +259,11 @@ void * leituraControlador(void * arg){
                     printf("\n %s\n", controlador.msg);
                     break;
                 case MSG_TERMINAR:
-                    printf("\n[CONTROLADOR] %s\n", controlador.msg);
-                    controlador_ativo = 0;
+                    printf("\n %s\n", controlador.msg);
+                    if(strcmp(controlador.veredito, "ACEITA")==0){
+                        printf("aceitou\n");
+                        controlador_ativo = 0;
+                    }else printf("rejeitou\n");
                     break;
                 case MSG_CONSULTAR:
                     if(strcmp(controlador.veredito, "ACEITA")==0){
@@ -418,7 +424,6 @@ int main(int argc, char* argv[]){
     }
 
     char linha[MAXCMD];
-    int terminar = 0;
     while (!terminar && controlador_ativo) {
         memset(&pedido, 0, sizeof(pedido));
         
@@ -453,6 +458,24 @@ int main(int argc, char* argv[]){
     
     printf("\n\n[CLIENTE] A terminar...\n");
     
+    if(forcado == 1){
+        Mensagem shutdown;
+        memset(&shutdown, 0, sizeof(shutdown));
+        shutdown.tipo = MSG_CLIENTESHUTDOWN;
+
+        strncpy(shutdown.username, username, MAX_USERNAME - 1);
+        shutdown.chave = chave;
+        strncpy(shutdown.fifo_name, private_fifo, MAX_MSG - 1);
+
+        strcpy(shutdown.msg, "Termino forçado do cliente!\n");
+        if (write(fd_controlador, &shutdown, sizeof(shutdown)) == -1) {
+            perror("[CLIENTE] Erro ao enviar aviso shutdown");
+        return -1;
+        }else printf("[CLIENTE] ✓ Aviso de shutdown enviado\n");
+
+    }
+    
+    //pthread_kill(thread_telemetria, SIGUSR1);
     pthread_cancel(thread_telemetria);
     pthread_join(thread_telemetria, NULL);
 
