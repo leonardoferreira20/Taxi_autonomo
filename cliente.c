@@ -1,22 +1,11 @@
 #include "Settings.h"
 
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <errno.h>
-
 int controlador_ativo = 1;
 int terminar = 0;
 int forcado = 0;
 char username_global[MAX_USERNAME];
 
-// ALTERAR
-ComandoParsed parsear_comando(const char *linha) {
+ComandoParsed parseComando(const char *linha) {
     ComandoParsed cmd;
     memset(&cmd, 0, sizeof(cmd));
     cmd.valido = 0;
@@ -126,7 +115,7 @@ ComandoParsed parsear_comando(const char *linha) {
 }
 
 // HANDLER PARA DETETAR MORTE DO CONTROLADOR (SIGPIPE)
-void handler_pipe(int sig, siginfo_t *siginfo, void *ctx) {
+void handler_finalizar(int sig, siginfo_t *siginfo, void *ctx) {
     (void)siginfo;
     (void)ctx;
 
@@ -151,7 +140,6 @@ void handler_terminar(int sig) {
     (void)sig;
 }
 
-
 // MOSTRAR MENU DE COMANDOS
 void mostrar_ajuda() {
     printf("\n-------------------------------------------------------\n");
@@ -166,7 +154,7 @@ void mostrar_ajuda() {
 }
 
 // COMANDO AGENDAR
-int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedido, int hora, const char *local, int distancia) {
+int enviar_agendar(int fd, Mensagem *pedido, int hora, const char *local, int distancia) {
     pedido->tipo = MSG_AGENDAR;
     pedido->hora = hora;
     strncpy(pedido->local, local, MAX_LOCAL - 1);
@@ -181,7 +169,7 @@ int enviar_agendar(int fd, int fd_privado, const char *username, Mensagem *pedid
 }
 
 // COMANDO CONSULTAR
-int enviar_consultar(int fd, int fd_privado, const char *username, Mensagem *pedido) {
+int enviar_consultar(int fd, Mensagem *pedido) {
 
     pedido->tipo = MSG_CONSULTAR;
     if (write(fd, pedido, sizeof(*pedido)) == -1) {
@@ -195,7 +183,7 @@ int enviar_consultar(int fd, int fd_privado, const char *username, Mensagem *ped
 }
 
 // COMANDO CANCELAR
-int enviar_cancelar(int fd,int fd_privado, const char *username,Mensagem *pedido, int id) {
+int enviar_cancelar(int fd,Mensagem *pedido, int id) {
     
     pedido->tipo = MSG_CANCELAR;
     pedido->servico_id = id;
@@ -214,7 +202,7 @@ int enviar_cancelar(int fd,int fd_privado, const char *username,Mensagem *pedido
 }
 
 // COMANDO TERMINAR
-int enviar_terminar(int fd, int fd_privado, const char *username, Mensagem *pedido) {
+int enviar_terminar(int fd, Mensagem *pedido) {
     pedido->tipo = MSG_TERMINAR;
     
     if (write(fd, pedido, sizeof(*pedido)) == -1) {
@@ -228,24 +216,19 @@ int enviar_terminar(int fd, int fd_privado, const char *username, Mensagem *pedi
 int processar_comando(ComandoParsed *cmd, int fd_controlador, int fd_privado, const char *username, Mensagem *pedido) {
     
     if (strcmp(cmd->comando, "agendar") == 0) {
-        return enviar_agendar(fd_controlador, fd_privado, username, pedido, cmd->hora, cmd->local, cmd->distancia);
+        return enviar_agendar(fd_controlador, pedido, cmd->hora, cmd->local, cmd->distancia);
         
     } else if (strcmp(cmd->comando, "consultar") == 0) {
-        return enviar_consultar(fd_controlador, fd_privado, username, pedido);
+        return enviar_consultar(fd_controlador, pedido);
         
     } else if (strcmp(cmd->comando, "ajuda") == 0) {
         mostrar_ajuda();
         
     } else if (strcmp(cmd->comando, "cancelar") == 0) {
-        return enviar_cancelar(fd_controlador, fd_privado, username,pedido, cmd->id);
+        return enviar_cancelar(fd_controlador,pedido, cmd->id);
         
     } else if (strcmp(cmd->comando, "terminar") == 0) {
-        // Verificar se está em serviço
-        /* if (em_servico) {
-            printf("[CLIENTE] Não pode terminar enquanto está em serviço!\n");
-            return -1;
-        } */
-        return enviar_terminar(fd_controlador,fd_privado, username, pedido);
+        return enviar_terminar(fd_controlador, pedido);
     }
     
     return 0;
@@ -262,7 +245,7 @@ void * leituraControlador(void * arg){
         if (nbytes == -1) {
             if (errno != EINTR) {
                 perror("[CLIENTE] Erro na leitura da resposta!\n");
-            }else{ //Este é o erro do sinal!
+            }else{
                 perror("[CLIENTE] Encerrar a leitura de mensagens!\n");
             }
             return 0;
@@ -309,28 +292,41 @@ void * leituraControlador(void * arg){
 
     if(controlador_ativo) {
         printf("%s > ", username_global);
-        //fflush(stdout);
     }
+    return NULL;
 }
 
 int main(int argc, char* argv[]){
     setbuf(stdout, NULL);
     
+    // VERIFICACAO DE NUMERO DE ARGUMENTOS
+    if (argc != 2){
+        perror("Numero invalido de parametros!\n");
+        exit(1);
+    }
+
+    //Inicializacao de variaveis e estruturas
+    int pid = getpid();
     int chave = 0;
     char * username;
     char private_fifo[MAX_MSG];
+    username = argv[1];
+    strcpy(username_global, username);
+
     Mensagem pedido;
     Mensagem resposta;
+    //Reset de estruturas 
     memset(&pedido, 0, sizeof(pedido));
     memset(&resposta, 0, sizeof(resposta));
     
+    //Tratamento de sinai
     struct sigaction sa_pipe;
     memset(&sa_pipe, 0, sizeof(sa_pipe));
-    sa_pipe.sa_sigaction = handler_pipe;
+    sa_pipe.sa_sigaction = handler_finalizar;
     sa_pipe.sa_flags = SA_SIGINFO;
     sigemptyset(&sa_pipe.sa_mask);
 
-    sigaction(SIGPIPE, &sa_pipe, NULL);   // ✅ controlador morreu / pipe partido
+    sigaction(SIGPIPE, &sa_pipe, NULL);
     sigaction(SIGINT,  &sa_pipe, NULL);
     sigaction(SIGUSR1, &sa_pipe, NULL);
 
@@ -342,20 +338,10 @@ int main(int argc, char* argv[]){
 
     sigaction(SIGUSR2, &sa_term, NULL);
 
-    // VERIFICACAO DE NUMERO DE ARGUMENTOS
-    if (argc != 2){
-        perror("Numero invalido de parametros!\n");
-        exit(1);
-    }
-
     // ATRIBUIR NOME DO UTILIZADOR E VALIDAR SE ULTRAPASSA O MÁXIMO DEFINIDO 
     // Escrita para o servidor autenticacao
     // Cliente envia o seu username para o servidor para se autenticar
     // Se não existir outro utilizador com este username e ainda houver espaço para o utilizador (servidor tem numeo maximo de utilizadores) O login é bem sucedido
-    // write(fd,argv[1],strlen(argv[1])+1);
-
-    username = argv[1];
-    strcpy(username_global, username);
 
     if (strlen(username) >= MAX_USERNAME) {
         fprintf(stderr, "[CLIENTE] ERRO: Username demasiado longo (max %d)\n", MAX_USERNAME - 1);
@@ -364,6 +350,7 @@ int main(int argc, char* argv[]){
     
     printf("[CLIENTE] Utilizador: %s\n", username);
 
+    //Verificar se o Controlador está ativo
     if (access(SERVERFIFO, F_OK) != 0) {
         fprintf(stderr, "[CLIENTE] ERRO: Controlador não está ativo!\n");
         fprintf(stderr, "[CLIENTE] Por favor, inicie o controlador primeiro.\n");
@@ -382,7 +369,7 @@ int main(int argc, char* argv[]){
 
     printf("[CLIENTE] FIFO privado criado: %s\n", private_fifo);
 
-    // ABRIR FIFO DO CONTROLADOR
+    // ABRIR FIFO DO CONTROLADOR PARA WRITE ONLY
     // DEFINIDO NAS SETTINGS O NOME DO SERVIDOR
     // ACESSO AO PIPE ABERTO PELO SERVIDOR (JÁ DEVE ESTAR ABERTO DO LADO DO SERVIDOR)
     int fd_controlador = open(SERVERFIFO, O_WRONLY);
@@ -397,7 +384,8 @@ int main(int argc, char* argv[]){
     // ENVIAR PEDIDO DE LOGIN
     strncpy(pedido.username, username, MAX_USERNAME - 1);
     pedido.username[MAX_USERNAME - 1] = '\0';
-    pedido.pid = getpid();
+    
+    pedido.pid = pid;
     pedido.chave = chave;
     
     strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
@@ -452,6 +440,7 @@ int main(int argc, char* argv[]){
     chave = resposta.chave;
     mostrar_ajuda();
 
+    //Abertura da thread de telemetria para receber comunicacao do Controlador
     pthread_t thread_telemetria;
     if(pthread_create(&thread_telemetria, NULL, leituraControlador, &fd_privado) != 0){
         perror("[CONTROLADOR] Erro a criar a thread de leitura!");
@@ -464,7 +453,7 @@ int main(int argc, char* argv[]){
         
         strncpy(pedido.username, username, MAX_USERNAME - 1);
         pedido.username[MAX_USERNAME - 1] = '\0';
-        pedido.pid = getpid();
+        pedido.pid = pid;
         strncpy(pedido.fifo_name, private_fifo, MAX_MSG - 1);
         pedido.fifo_name[MAX_MSG - 1] = '\0';
         pedido.chave = chave;
@@ -476,7 +465,7 @@ int main(int argc, char* argv[]){
             break;
         }
         
-        ComandoParsed cmd = parsear_comando(linha);
+        ComandoParsed cmd = parseComando(linha);
         
         if (!cmd.valido) {
             continue;

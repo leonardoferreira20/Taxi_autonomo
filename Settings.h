@@ -16,14 +16,15 @@
 
 // CONSTANTES
 #define MAXCMD 256
-#define MAXCLI 2
-#define MAX_VEHICLES 10
+#define MAXCLI 30
+#define MAX_VEHICLES 1000
 #define MAX_SERVICES 30
+#define TEMPO_INICIAL 0
 #define TEMPOINSTANTE 5
 
 #define VARAMB "NVEICULOS"
 
-#define MAX_USERNAME 50
+#define MAX_USERNAME 100
 #define MAX_LOCAL 100
 #define MAX_DESTINO 100
 #define MAX_MSG 512*4
@@ -31,7 +32,6 @@
 #define SERVERFIFO "fifo_server"
 #define CLIENTE_FIFO_PREFIX "cli_"
 #define VEICULOFIFO "veiculo"
-#define TEMPO_INICIAL 0
 
 typedef enum {
 	MSG_LIMPA = 0,
@@ -39,15 +39,13 @@ typedef enum {
 	MSG_AGENDAR = 2,
 	MSG_CONSULTAR = 3,
 	MSG_CANCELAR = 4,
-	MSG_RESPOSTA = 5,
-	MSG_TERMINAR = 6,
-	MSG_NOTIFICACAO = 7,
-	MSG_ACEITA = 8, 
-	MSG_RECUSA = 9, 
-	MSG_NAOAUTENTICADO = 10,
-	MSG_VEICULO = 11,
-	MSG_ADMINSHUTDOWN = 12,
-	MSG_CLIENTESHUTDOWN =13
+	MSG_TERMINAR = 5,
+	MSG_ACEITA = 6, 
+	MSG_RECUSA =7, 
+	MSG_NAOAUTENTICADO = 8,
+	MSG_VEICULO = 9,
+	MSG_ADMINSHUTDOWN = 10,
+	MSG_CLIENTESHUTDOWN =11
 } TipoMensagem;
 
 typedef struct {
@@ -56,13 +54,6 @@ typedef struct {
 	float kms;
 	int percentagem;
 } Telemetria;
-
-// AUTENTICAÇÃO
-typedef struct {
-	char username[MAX_USERNAME];
-	pid_t pid;
-	char fifo_name[MAX_MSG];
-} Authentication;
 
 // MENSAGEM
 typedef struct {
@@ -73,14 +64,12 @@ typedef struct {
 	char fifo_name[MAX_MSG];
 	int chave;
 	int pid;
-	int tempo_viagem;
 	char veredito[10];
 	// Campos específicos (usar conforme o tipo)
 	int hora;
 	char local[MAX_LOCAL];
 	int distancia;
 	int servico_id;
-	char destino[MAX_DESTINO];
 } Mensagem;
 
 // UTILIZADOR - CONTROLADOR
@@ -94,19 +83,11 @@ typedef struct {
 	char local[MAX_LOCAL];
 } Servico_Marcado;
 
-typedef struct{
-	int nServicos;
-	Servico_Marcado servicosT[MAX_SERVICES];
-} Servico_Taxi;
-
 typedef struct {
 	char username[MAX_USERNAME];
 	char fifo_name[MAX_MSG];
 	int chave;
 	int pid;
-	int distancia;
-	int ativo;
-	//int pagou;
 	int em_viagem;          // 1 se está em viagem, 0 caso contrário
 	int chato;
 	int servicos_ativos;		// Indice do arry de servicos
@@ -121,8 +102,7 @@ typedef struct {
 	int indiceServico;
 
 	pid_t pid_veiculo;        // PID do processo veiculo (depois do fork)
-
-	int fd_leitura;      // fd do lado de leitura do pipe anonimo
+	pthread_t tid;
 	int horaFimServico;
 	char username[MAX_USERNAME];
 	char fifo_cliente[MAX_MSG];
@@ -141,11 +121,5 @@ typedef struct {
 	char destino[MAX_DESTINO];
 	int valido;                 // 1=válido, 0=inválido
 } ComandoParsed;
-
-typedef struct {
-	Authentication auth;
-	int thread_id;
-} ThreadClienteArgs;
-
 
 #endif

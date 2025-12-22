@@ -38,7 +38,6 @@ int main(int argc, char * argv[]) {
     Telemetria tel;
     memset(&tel, 0, sizeof(tel));
 
-    //sprintf(tel.msg, "[VEICULO #%d] Iniciando viagem de %d km.\n", id, distancia);
     sprintf(tel.msg, "[VEICULO #%d] Chegou ao local de recolha.\n Cliente %s entrou no veiculo.\n Iniciando viagem de %d km.\n", id+1, username, distancia);
 
     tel.em_viagem = 1;
@@ -47,7 +46,7 @@ int main(int argc, char * argv[]) {
     write(STDOUT_FILENO, &tel, sizeof(tel));
 
     int count = 0;
-    int percent = 10;   // próximo marco de percentagem (10%, 20%, ...)
+    int percent = 10;   // próximo marco de percentagem
 
     while (veiculo_running && count < distancia) {
         ++count;
